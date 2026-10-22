@@ -1,4 +1,4 @@
-# 爆楽勤怠（Bak uraku Kintai）
+# 爆楽勤怠（Bakuraku Kintai）
 
 > 勤怠管理を、爆発的にラクに。
 
