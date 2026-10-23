@@ -5,7 +5,7 @@
 **AWSネットワーク・インフラ・Webアプリケーション開発の学習を目的とした、出退勤管理アプリの個人開発プロジェクトです。**  
 会社・顧客の実データは使用せず、架空のデモユーザーで検証します。
 
-> **開発状況：計画・基盤準備中。** 以下は実装予定であり、現時点で動作・公開を保証するものではありません。
+> **開発状況：WBS 0.2 の雛形実装済み（業務機能は未実装）。** 以下は実装予定であり、現時点で動作・公開を保証するものではありません。
 
 ## アプリの主な機能（予定）
 
@@ -66,10 +66,56 @@ Private Subnet: Lambda (EventBridge Scheduler)
 
 計画工数は**ユーザー実働137時間**（予備日2日を別途想定）。ChatGPTは設計・実装・テスト・レビューを支援します。
 
+## ローカル起動手順（WBS 0.2 雛形）
+
+必要な環境：**Python 3.11 以上、Node.js 20.19 以上または 22.12 以上、npm**。以下は暫定手順で、仮想環境・pytest・簡易DBなどの本格的な整備は WBS 0.3 以降に行います。
+
+### バックエンド（ターミナル1）
+
+```bash
+cd backend
+python -m venv .venv
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+# Linux / macOS: source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+`http://127.0.0.1:8000/api/health` が `{"status":"ok"}` を返すことを確認します。
+
+### フロントエンド（ターミナル2）
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+`http://127.0.0.1:5173` にアクセスします。Viteは開発時 `/api/*` を `127.0.0.1:8000` にプロキシします。画面にはAPIの接続状態のみ表示され、**打刻・履歴は未実装**です。
+
+公開用ファイルは `cd frontend && npm run build` で `frontend/dist/` に生成されます。AWS環境のAPIルーティング・認証は後続WBSで確認します。
+
+### ディレクトリ
+
+```text
+backend/
+  app/
+    __init__.py
+    main.py          # FastAPI
+  requirements.txt
+frontend/
+  index.html
+  package.json
+  vite.config.js     # 開発時APIプロキシ
+  src/
+    main.js          # 最小画面
+    style.css
+```
+
 ## 公開リポジトリのセキュリティ方針
 
 AWSアクセスキー、パスワード、認証トークン、秘密鍵、実際の勤怠データ、実環境の接続情報はコミットしません。認証情報は環境変数やAWSの適切なシークレット管理手段で扱い、`.env` はコミットしない方針です。GitHub Issues・PR本文にも機密情報を記載しません。
 
 ## ステータス
 
-**未実装／計画段階。** 実装を開始したら、起動手順、テスト方法、構成図、デモ画像を順次追加します。
+**WBS 0.2：FastAPI / Vite の雛形を実装。** 打刻、履歴、DB、認証などの業務機能は今後実装します。
