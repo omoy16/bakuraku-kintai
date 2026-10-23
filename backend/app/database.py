@@ -1,4 +1,4 @@
-"""SQLite connection helpers for the local MVP (WBS 0.3)."""
+"""SQLite initialization and connection helpers for the local MVP."""
 
 import os
 import sqlite3
@@ -16,16 +16,21 @@ def get_db_path() -> Path:
 
 
 def init_db() -> Path:
-    """Create a local SQLite file without deleting existing data.
-
-    Business tables are added in WBS 0.4. The PRAGMA initializes the file header
-    without introducing a temporary business schema or changing its version.
-    """
+    """Create the MVP tables and indexes without deleting existing data."""
     path = get_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     with closing(sqlite3.connect(path)) as connection:
-        version = connection.execute("PRAGMA user_version").fetchone()[0]
-        connection.execute(f"PRAGMA user_version = {version}")
+        connection.executescript("""
+            CREATE TABLE IF NOT EXISTS attendance_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                clock_in_at TEXT NOT NULL,
+                clock_out_at TEXT,
+                CHECK (clock_out_at IS NULL OR clock_out_at >= clock_in_at)
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS one_active_attendance_per_user
+                ON attendance_records (user_id) WHERE clock_out_at IS NULL;
+        """)
         connection.commit()
     return path
 
