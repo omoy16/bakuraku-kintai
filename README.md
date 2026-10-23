@@ -5,7 +5,7 @@
 **AWSネットワーク・インフラ・Webアプリケーション開発の学習を目的とした、出退勤管理アプリの個人開発プロジェクトです。**  
 会社・顧客の実データは使用せず、架空のデモユーザーで検証します。
 
-> **開発状況：WBS 0.3 のローカル開発環境を整備（業務機能は未実装）。** 以下は実装予定であり、現時点で動作・公開を保証するものではありません。
+> **開発状況：WBS 0.4 の打刻API PoCを実装（画面の打刻操作は未実装）。** 以下は実装予定であり、現時点で動作・公開を保証するものではありません。
 
 ## アプリの主な機能（予定）
 
@@ -117,7 +117,7 @@ python dev.py frontend
 
 ブラウザで `http://127.0.0.1:5173` を開き、**API：接続OK**を確認します。
 Viteは開発時 `/api/*` を `127.0.0.1:8000` にプロキシします。
-停止は各ターミナルでCtrl+C。打刻・履歴はWBS 0.4以降に実装します。
+停止は各ターミナルでCtrl+C。現在の画面はAPI接続確認のみです。打刻APIはWBS 0.4、打刻画面は0.5、履歴一覧は0.6で整備します。
 
 ### コマンドと確認先
 
@@ -139,7 +139,7 @@ DB確認APIは接続・SQLiteスキーマ読み取りを確認します。業務
 ### 簡易DBの扱い
 
 - 既定の保存先は `backend/data/bakuraku.sqlite3`。DBファイル・仮想環境はGit管理対象外です。
-- 初期化ではSQLiteファイルだけを用意します。勤怠テーブルはWBS 0.4で追加します。
+- 初期化ではSQLiteファイルと勤怠テーブル・インデックスを用意します。0.3のDBを使っている場合も、APIを停止して `python dev.py init-db` を再実行してください。既存データは保持します。
 - 保存先を変える場合は環境変数 `BAKURAKU_DB_PATH` を指定します。相対パスは常にbackend/を基準とします。
 - PowerShellの設定例：`$env:BAKURAKU_DB_PATH = "data/custom.sqlite3"`
 - macOS / Linuxの設定例：`export BAKURAKU_DB_PATH="data/custom.sqlite3"`
@@ -157,9 +157,11 @@ backend/
     __init__.py
     main.py               # FastAPI / API・DB接続確認
     database.py           # SQLite初期化・接続
+    attendance.py         # 出勤・退勤・勤務状態API
   data/                   # ローカルDB（Git対象外）
   tests/
     test_local_environment.py
+    test_attendance.py
   requirements.txt        # API実行用
   requirements-dev.txt    # 開発・テスト用
 frontend/
@@ -171,10 +173,49 @@ frontend/
     style.css
 ```
 
+## 打刻API PoC（WBS 0.4）
+
+ユーザーは固定の `demo-user` です。リクエスト本文・ユーザー指定は不要で、打刻時刻はサーバー側のUTCで記録します。JSONの日時はUTCのISO 8601形式（末尾 `Z` または `+00:00`）です。画面での日本時間への変換は後続UIで行います。
+
+| メソッド | パス | 成功時 | 内容 |
+|---|---|---|---|
+| GET | `/api/attendance/status` | 200 | `user_id`、`status`、`active_record` |
+| POST | `/api/attendance/clock-in` | 201 | 作成した勤怠レコード |
+| POST | `/api/attendance/clock-out` | 200 | 退勤時刻を入れた勤怠レコード |
+
+レコードは `id`、`user_id`、`clock_in_at`、`clock_out_at` を返します。勤務中は `clock_out_at` がnullです。
+`status` は `not_working` / `working` の2種類です。勤務中だけ `active_record` にレコードが入り、それ以外はnullです。退勤後は `not_working` に戻り、同日でも次の勤務を開始できます。
+
+- 日付で勤務を区切りません。日本時間・UTCの日付が変わっても勤務中を維持します。
+- 16時間を過ぎても自動退勤しません。確認モーダルは後続WBSで追加します。
+- 二重出勤は409 / `Already working`、未出勤または退勤済みの退勤は409 / `Not working` です。既存レコードは変更しません。
+- サーバー時刻が出勤時刻より前に戻った場合、退勤は409 / `Clock is earlier than clock-in time` となり、勤務中を維持します。
+- DB未初期化・テーブル未作成・接続不可などは503 / `Database unavailable` です。`python dev.py init-db` とDB設定を確認してください。
+- 打刻の状態確認と書き込みは同一トランザクションで処理し、DBの一意制約でも「1ユーザーの勤務中レコードは最大1件」を保証します。
+
+### 手動確認（PowerShell）
+
+初回セットアップまたは更新後のDB初期化を済ませ、`python dev.py api` を起動します。別ターミナルで順番に実行してください。
+
+```powershell
+$base = "http://127.0.0.1:8000"
+Invoke-RestMethod "$base/api/attendance/status"
+Invoke-RestMethod -Method Post "$base/api/attendance/clock-in"
+Invoke-RestMethod "$base/api/attendance/status"
+Invoke-RestMethod -Method Post "$base/api/attendance/clock-out"
+Invoke-RestMethod "$base/api/attendance/status"
+```
+
+状態が `not_working → working → not_working` になることと、出退勤で同じレコードIDが返ることを確認します。
+出勤後にAPIをCtrl+Cで停止・再起動しても `working` が残ることを確認できます。
+ブラウザの `http://127.0.0.1:8000/docs` からも各APIを実行できます。Vite起動中は `http://127.0.0.1:5173/api/attendance/status` でも状態を取得できます。
+
+このPoCでは全アクセスが同じデモユーザーの記録を操作します。Cognito認証・ユーザー分離はWBS 3.xで追加します。履歴API・取消・修正・PostgreSQLへの移行も後続WBSで扱います。
+
 ## 公開リポジトリのセキュリティ方針
 
 AWSアクセスキー、パスワード、認証トークン、秘密鍵、実際の勤怠データ、実環境の接続情報はコミットしません。認証情報は環境変数やAWSの適切なシークレット管理手段で扱い、`.env` はコミットしない方針です。GitHub Issues・PR本文にも機密情報を記載しません。
 
 ## ステータス
 
-**WBS 0.3：仮想環境・pytest・SQLite・起動コマンドを整備。** 打刻、履歴、認証などの業務機能は今後実装します。
+**WBS 0.4：固定デモユーザーの出勤・退勤・勤務状態取得APIを実装。** 打刻画面・履歴一覧・認証などは後続WBSで実装します。
