@@ -5,7 +5,7 @@
 **AWSネットワーク・インフラ・Webアプリケーション開発の学習を目的とした、出退勤管理アプリの個人開発プロジェクトです。**  
 会社・顧客の実データは使用せず、架空のデモユーザーで検証します。
 
-> **開発状況：WBS 0.2 の雛形実装済み（業務機能は未実装）。** 以下は実装予定であり、現時点で動作・公開を保証するものではありません。
+> **開発状況：WBS 0.4 の打刻API PoCを実装（画面の打刻操作は未実装）。** 以下は実装予定であり、現時点で動作・公開を保証するものではありません。
 
 ## アプリの主な機能（予定）
 
@@ -66,51 +66,151 @@ Private Subnet: Lambda (EventBridge Scheduler)
 
 計画工数は**ユーザー実働137時間**（予備日2日を別途想定）。ChatGPTは設計・実装・テスト・レビューを支援します。
 
-## ローカル起動手順（WBS 0.2 雛形）
+## ローカル開発環境（WBS 0.3）
 
-必要な環境：**Python 3.11 以上、Node.js 20.19 以上または 22.12 以上、npm**。以下は暫定手順で、仮想環境・pytest・簡易DBなどの本格的な整備は WBS 0.3 以降に行います。
+必要な環境：**Python 3.11 以上、Node.js 20.19 以上または 22.12 以上、npm**。
+MVPの簡易DBはPython標準のSQLiteを使います。PostgreSQLへの移行とSQLAlchemy / Alembicの導入はWBS 1.1–1.2で行います。
 
-### バックエンド（ターミナル1）
+### 初回セットアップ
+
+リポジトリのルート（このREADMEがある場所）で実行します。
 
 ```bash
-cd backend
 python -m venv .venv
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-# Linux / macOS: source .venv/bin/activate
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-`http://127.0.0.1:8000/api/health` が `{"status":"ok"}` を返すことを確認します。
+仮想環境を有効化します。以降のPythonコマンドは有効化した環境で実行してください。
 
-### フロントエンド（ターミナル2）
+| 環境 | 有効化コマンド |
+|---|---|
+| Windows PowerShell | `.venv\Scripts\Activate.ps1` |
+| Windows コマンドプロンプト | `.venv\Scripts\activate.bat` |
+| macOS / Linux | `source .venv/bin/activate` |
+
+PowerShellで有効化スクリプトが拒否される場合は、仮想環境のPythonを直接呼び出せます。
+例えば `.venv\Scripts\python.exe -m pip install -r backend/requirements-dev.txt`、
+`.venv\Scripts\python.exe dev.py api` のように実行します。
 
 ```bash
-cd frontend
-npm install
-npm run dev
+python -m pip install -r backend/requirements-dev.txt
+python dev.py init-db
+python dev.py test
+npm --prefix frontend install
 ```
 
-`http://127.0.0.1:5173` にアクセスします。Viteは開発時 `/api/*` を `127.0.0.1:8000` にプロキシします。画面にはAPIの接続状態のみ表示され、**打刻・履歴は未実装**です。
+仮想環境はルートの `.venv/` に統一します。0.2の手順で作った `backend/.venv/` は以降使いません。
+`requirements-dev.txt` はAPI実行用依存に加え、pytest / TestClient用のHTTPXをインストールします。
 
-公開用ファイルは `cd frontend && npm run build` で `frontend/dist/` に生成されます。AWS環境のAPIルーティング・認証は後続WBSで確認します。
+### 起動（ターミナルを2つ使用）
+
+ターミナル1で仮想環境を有効化し、APIを起動します。
+
+```bash
+python dev.py api
+```
+
+ターミナル2をルートで開き、フロントエンドを起動します。Pythonは仮想環境のものを使います。
+
+```bash
+python dev.py frontend
+```
+
+ブラウザで `http://127.0.0.1:5173` を開き、**API：接続OK**を確認します。
+Viteは開発時 `/api/*` を `127.0.0.1:8000` にプロキシします。
+停止は各ターミナルでCtrl+C。現在の画面はAPI接続確認のみです。打刻APIはWBS 0.4、打刻画面は0.5、履歴一覧は0.6で整備します。
+
+### コマンドと確認先
+
+| コマンド / URL | 内容・期待結果 |
+|---|---|
+| `python dev.py init-db` | SQLite初期化。既存のデータ・DBバージョンは保持 |
+| `python dev.py api` | FastAPIを127.0.0.1:8000で開発起動 |
+| `python dev.py test` | pytest実行。一時DBを使い、開発DBは変更しない |
+| `python dev.py frontend` | Viteの開発サーバーを起動 |
+| `python dev.py build` | 公開用ファイルをfrontend/dist/へ生成 |
+| `http://127.0.0.1:8000/api/health` | HTTP 200 / `{"status":"ok"}` |
+| `http://127.0.0.1:8000/api/health/db` | HTTP 200 / `{"status":"ok","database":"sqlite"}` |
+| `http://127.0.0.1:8000/docs` | FastAPIのAPI操作画面 |
+
+DB未初期化・接続不可・ファイル破損時、DB確認APIはHTTP 503を返します。API単体のhealthはDBとは独立しています。
+DB確認APIは接続・SQLiteスキーマ読み取りを確認します。業務テーブルの存在確認や完全な整合性検査は行いません。
+`dev.py` は作業ディレクトリに依存せず実行できますが、ルート以外から呼ぶ場合はスクリプトのパスを指定してください。
+
+### 簡易DBの扱い
+
+- 既定の保存先は `backend/data/bakuraku.sqlite3`。DBファイル・仮想環境はGit管理対象外です。
+- 初期化ではSQLiteファイルと勤怠テーブル・インデックスを用意します。0.3のDBを使っている場合も、APIを停止して `python dev.py init-db` を再実行してください。既存データは保持します。
+- 保存先を変える場合は環境変数 `BAKURAKU_DB_PATH` を指定します。相対パスは常にbackend/を基準とします。
+- PowerShellの設定例：`$env:BAKURAKU_DB_PATH = "data/custom.sqlite3"`
+- macOS / Linuxの設定例：`export BAKURAKU_DB_PATH="data/custom.sqlite3"`
+- 環境変数は初期化とAPI起動の両方で同じ値にしてください。`.env` ファイルの自動読み込みは行いません。
+- 開発DBを作り直す場合はAPIを停止し、必要なデータを退避してからファイルを削除し、再度 `python dev.py init-db` を実行します。
 
 ### ディレクトリ
 
 ```text
+.venv/                    # 開発用Python仮想環境（Git対象外）
+dev.py                    # ローカル開発コマンド
+pytest.ini                # ルートからのpytest設定
 backend/
   app/
     __init__.py
-    main.py          # FastAPI
-  requirements.txt
+    main.py               # FastAPI / API・DB接続確認
+    database.py           # SQLite初期化・接続
+    attendance.py         # 出勤・退勤・勤務状態API
+  data/                   # ローカルDB（Git対象外）
+  tests/
+    test_local_environment.py
+    test_attendance.py
+  requirements.txt        # API実行用
+  requirements-dev.txt    # 開発・テスト用
 frontend/
   index.html
   package.json
-  vite.config.js     # 開発時APIプロキシ
+  vite.config.js          # 開発時APIプロキシ
   src/
-    main.js          # 最小画面
+    main.js               # 最小画面
     style.css
 ```
+
+## 打刻API PoC（WBS 0.4）
+
+ユーザーは固定の `demo-user` です。リクエスト本文・ユーザー指定は不要で、打刻時刻はサーバー側のUTCで記録します。JSONの日時はUTCのISO 8601形式（末尾 `Z` または `+00:00`）です。画面での日本時間への変換は後続UIで行います。
+
+| メソッド | パス | 成功時 | 内容 |
+|---|---|---|---|
+| GET | `/api/attendance/status` | 200 | `user_id`、`status`、`active_record` |
+| POST | `/api/attendance/clock-in` | 201 | 作成した勤怠レコード |
+| POST | `/api/attendance/clock-out` | 200 | 退勤時刻を入れた勤怠レコード |
+
+レコードは `id`、`user_id`、`clock_in_at`、`clock_out_at` を返します。勤務中は `clock_out_at` がnullです。
+`status` は `not_working` / `working` の2種類です。勤務中だけ `active_record` にレコードが入り、それ以外はnullです。退勤後は `not_working` に戻り、同日でも次の勤務を開始できます。
+
+- 日付で勤務を区切りません。日本時間・UTCの日付が変わっても勤務中を維持します。
+- 16時間を過ぎても自動退勤しません。確認モーダルは後続WBSで追加します。
+- 二重出勤は409 / `Already working`、未出勤または退勤済みの退勤は409 / `Not working` です。既存レコードは変更しません。
+- サーバー時刻が出勤時刻より前に戻った場合、退勤は409 / `Clock is earlier than clock-in time` となり、勤務中を維持します。
+- DB未初期化・テーブル未作成・接続不可などは503 / `Database unavailable` です。`python dev.py init-db` とDB設定を確認してください。
+- 打刻の状態確認と書き込みは同一トランザクションで処理し、DBの一意制約でも「1ユーザーの勤務中レコードは最大1件」を保証します。
+
+### 手動確認（PowerShell）
+
+初回セットアップまたは更新後のDB初期化を済ませ、`python dev.py api` を起動します。別ターミナルで順番に実行してください。
+
+```powershell
+$base = "http://127.0.0.1:8000"
+Invoke-RestMethod "$base/api/attendance/status"
+Invoke-RestMethod -Method Post "$base/api/attendance/clock-in"
+Invoke-RestMethod "$base/api/attendance/status"
+Invoke-RestMethod -Method Post "$base/api/attendance/clock-out"
+Invoke-RestMethod "$base/api/attendance/status"
+```
+
+状態が `not_working → working → not_working` になることと、出退勤で同じレコードIDが返ることを確認します。
+出勤後にAPIをCtrl+Cで停止・再起動しても `working` が残ることを確認できます。
+ブラウザの `http://127.0.0.1:8000/docs` からも各APIを実行できます。Vite起動中は `http://127.0.0.1:5173/api/attendance/status` でも状態を取得できます。
+
+このPoCでは全アクセスが同じデモユーザーの記録を操作します。Cognito認証・ユーザー分離はWBS 3.xで追加します。履歴API・取消・修正・PostgreSQLへの移行も後続WBSで扱います。
 
 ## 公開リポジトリのセキュリティ方針
 
@@ -118,4 +218,4 @@ AWSアクセスキー、パスワード、認証トークン、秘密鍵、実�
 
 ## ステータス
 
-**WBS 0.2：FastAPI / Vite の雛形を実装。** 打刻、履歴、DB、認証などの業務機能は今後実装します。
+**WBS 0.4：固定デモユーザーの出勤・退勤・勤務状態取得APIを実装。** 打刻画面・履歴一覧・認証などは後続WBSで実装します。
