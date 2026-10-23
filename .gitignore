@@ -227,3 +227,10 @@ dist/
 # Local environment variants
 .env.*
 !.env.example
+
+# Local MVP database and SQLite journals
+backend/data/
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
