@@ -1,0 +1,1 @@
+"""Bakuraku Kintai API package."""

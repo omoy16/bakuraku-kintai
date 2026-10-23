@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node.js / Vite
+node_modules/
+dist/
+.vite/
+
+# Local environment variants
+.env.*
+!.env.example
