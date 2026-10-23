@@ -4,9 +4,11 @@ import sqlite3
 
 from fastapi import FastAPI, HTTPException
 
+from app.attendance import router as attendance_router
 from app.database import connect_db
 
 app = FastAPI(title="爆楽勤怠 API", version="0.1.0")
+app.include_router(attendance_router)
 
 
 @app.get("/api/health")
