@@ -66,6 +66,42 @@ def test_punch_cycle_persists_and_can_start_another_shift(client, monkeypatch):
     assert rows[1]["clock_out_at"] is None
 
 
+def test_history_is_empty_before_first_punch(client):
+    response = client.get("/api/attendance/history")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_history_returns_only_demo_user_newest_first(client, monkeypatch):
+    first_start = set_time(monkeypatch, "2026-10-21T00:00:00+00:00")
+    first = client.post("/api/attendance/clock-in").json()
+    first_end = set_time(monkeypatch, "2026-10-21T08:00:00+00:00")
+    client.post("/api/attendance/clock-out")
+
+    with connect_db() as connection:
+        connection.execute(
+            """INSERT INTO attendance_records (user_id, clock_in_at, clock_out_at)
+               VALUES (?, ?, ?)""",
+            (
+                "another-user",
+                "2026-10-22T00:00:00.000000+00:00",
+                "2026-10-22T08:00:00.000000+00:00",
+            ),
+        )
+
+    second_start = set_time(monkeypatch, "2026-10-23T00:00:00+00:00")
+    second = client.post("/api/attendance/clock-in").json()
+
+    response = client.get("/api/attendance/history")
+    assert response.status_code == 200
+    assert [record["id"] for record in response.json()] == [second["id"], first["id"]]
+    assert datetime.fromisoformat(response.json()[0]["clock_in_at"]) == second_start
+    assert response.json()[0]["clock_out_at"] is None
+    assert datetime.fromisoformat(response.json()[1]["clock_in_at"]) == first_start
+    assert datetime.fromisoformat(response.json()[1]["clock_out_at"]) == first_end
+    assert {record["user_id"] for record in response.json()} == {"demo-user"}
+
+
 def test_invalid_transitions_do_not_change_records(client):
     assert client.post("/api/attendance/clock-out").status_code == 409
     original = client.post("/api/attendance/clock-in").json()
@@ -143,6 +179,7 @@ def test_clock_regression_does_not_close_shift(client, monkeypatch):
 
 @pytest.mark.parametrize("method,path", [
     ("get", "/api/attendance/status"),
+    ("get", "/api/attendance/history"),
     ("post", "/api/attendance/clock-in"),
     ("post", "/api/attendance/clock-out"),
 ])

@@ -26,7 +26,14 @@ root.innerHTML = `
         <dl class="shift"><dt>出勤時刻</dt><dd id="clock-in-time">—</dd></dl>
         <p id="notice" class="notice" role="status"></p>
         <p id="error" class="error" role="alert" hidden></p>
-        <button id="refresh" class="refresh" type="button">状態を再確認</button>
+        <button id="refresh" class="refresh" type="button">状態・履歴を再確認</button>
+      </section>
+      <section id="history-panel" class="history-panel" aria-labelledby="history-title">
+        <div class="history-heading">
+          <h2 id="history-title">打刻履歴</h2><span>新しい順</span>
+        </div>
+        <p id="history-message" class="history-message" role="status">履歴を読み込んでいます。</p>
+        <ol id="history-list" class="history-list"></ol>
       </section>
       <p class="footnote">固定のデモユーザーで操作します。<br>打刻時刻はサーバーで記録されます。</p>
     </main>
@@ -36,10 +43,12 @@ root.innerHTML = `
 
 const elements = Object.fromEntries([
   "work-status", "today", "clock", "guidance", "punch", "clock-in-time",
-  "notice", "error", "refresh",
+  "notice", "error", "refresh", "history-panel", "history-message", "history-list",
 ].map((id) => [id, document.getElementById(id)]));
 
 let attendance = null; // null means that the server state is unknown.
+let attendanceHistory = null;
+let historyError = "";
 let busy = false;
 const dateFormat = new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "long",
@@ -50,6 +59,12 @@ const timeFormat = new Intl.DateTimeFormat("ja-JP", {
 const punchFormat = new Intl.DateTimeFormat("ja-JP", {
   timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit",
   hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+});
+const historyDateFormat = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric", weekday: "short",
+});
+const historyTimeFormat = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
 
 function updateClock() {
@@ -74,6 +89,61 @@ function render() {
   elements["clock-in-time"].textContent = working
     ? punchFormat.format(new Date(attendance.active_record.clock_in_at)) : "—";
   elements.refresh.disabled = busy;
+}
+
+function historyItem(record) {
+  const item = document.createElement("li");
+  item.className = "history-item";
+
+  const heading = document.createElement("div");
+  heading.className = "history-item-heading";
+  const date = document.createElement("time");
+  date.dateTime = record.clock_in_at;
+  date.textContent = historyDateFormat.format(new Date(record.clock_in_at));
+  const status = document.createElement("span");
+  status.className = record.clock_out_at ? "history-status" : "history-status working";
+  status.textContent = record.clock_out_at ? "退勤済み" : "勤務中";
+  heading.append(date, status);
+
+  const times = document.createElement("dl");
+  times.className = "history-times";
+  for (const [label, value] of [
+    ["出勤", record.clock_in_at], ["退勤", record.clock_out_at],
+  ]) {
+    const term = document.createElement("dt");
+    term.textContent = label;
+    const detail = document.createElement("dd");
+    if (value) {
+      const time = document.createElement("time");
+      time.dateTime = value;
+      time.textContent = historyTimeFormat.format(new Date(value));
+      detail.append(time);
+    } else {
+      detail.textContent = "—";
+    }
+    times.append(term, detail);
+  }
+  item.append(heading, times);
+  return item;
+}
+
+function renderHistory() {
+  elements["history-panel"].setAttribute("aria-busy", String(busy && attendanceHistory === null));
+  elements["history-list"].replaceChildren();
+  if (attendanceHistory === null) {
+    elements["history-message"].hidden = false;
+    elements["history-message"].classList.toggle("error-text", Boolean(historyError));
+    elements["history-message"].textContent = historyError || "履歴を読み込んでいます。";
+    return;
+  }
+  elements["history-message"].classList.remove("error-text");
+  if (attendanceHistory.length === 0) {
+    elements["history-message"].hidden = false;
+    elements["history-message"].textContent = "まだ打刻履歴はありません。";
+    return;
+  }
+  elements["history-message"].hidden = true;
+  elements["history-list"].append(...attendanceHistory.map(historyItem));
 }
 
 function showError(message = "") {
@@ -110,21 +180,50 @@ async function readStatus() {
   attendance = data;
 }
 
+async function readHistory() {
+  const data = await request("history");
+  const isTimestamp = (value) => typeof value === "string" && !Number.isNaN(Date.parse(value));
+  if (!Array.isArray(data) || !data.every((record) => record
+      && Number.isInteger(record.id)
+      && record.user_id === "demo-user"
+      && isTimestamp(record.clock_in_at)
+      && (record.clock_out_at === null || isTimestamp(record.clock_out_at)))) {
+    throw new Error("Unexpected attendance history response");
+  }
+  attendanceHistory = data;
+  historyError = "";
+}
+
+async function readHistorySafely() {
+  attendanceHistory = null;
+  historyError = "";
+  try {
+    await readHistory();
+  } catch {
+    historyError = "履歴を取得できませんでした。「状態・履歴を再確認」を押してください。";
+  }
+}
+
 async function refreshStatus() {
   if (busy) return;
   busy = true;
   attendance = null;
+  attendanceHistory = null;
+  historyError = "";
   elements.notice.textContent = "";
   showError();
   render();
-  try {
-    await readStatus();
-  } catch {
-    showError("勤務状態を取得できませんでした。API・DBの起動を確認し、「状態を再確認」を押してください。");
-  } finally {
-    busy = false;
-    render();
+  renderHistory();
+  const [statusResult, historyResult] = await Promise.allSettled([readStatus(), readHistory()]);
+  if (statusResult.status === "rejected") {
+    showError("勤務状態を取得できませんでした。API・DBの起動を確認し、「状態・履歴を再確認」を押してください。");
   }
+  if (historyResult.status === "rejected") {
+    historyError = "履歴を取得できませんでした。API・DBの起動を確認してください。";
+  }
+  busy = false;
+  render();
+  renderHistory();
 }
 
 async function punch() {
@@ -154,15 +253,18 @@ async function punch() {
           : "通信結果を確認できませんでした。最新の勤務状態を表示しています。再度押す前に状態と出勤時刻を確認してください。");
     } catch {
       showError(recorded
-        ? `${label}は記録されましたが、勤務状態を取得できません。「状態を再確認」を押してください。`
-        : "打刻結果を確認できません。再送せず、「状態を再確認」で勤務状態を確認してください。");
+        ? `${label}は記録されましたが、勤務状態を取得できません。「状態・履歴を再確認」を押してください。`
+        : "打刻結果を確認できません。再送せず、「状態・履歴を再確認」で勤務状態を確認してください。");
     }
   } finally {
+    await readHistorySafely();
     busy = false;
     render();
+    renderHistory();
   }
 }
 
 elements.punch.addEventListener("click", punch);
 elements.refresh.addEventListener("click", refreshStatus);
+renderHistory();
 void refreshStatus();
