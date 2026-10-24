@@ -65,6 +65,21 @@ def get_status() -> AttendanceStatus:
         )
 
 
+@router.get("/history", response_model=list[AttendanceRecord])
+def get_history() -> list[AttendanceRecord]:
+    """Return the demo user's punches, newest shift first."""
+    with attendance_db() as connection:
+        rows = connection.execute(
+            """
+            SELECT * FROM attendance_records
+            WHERE user_id = ?
+            ORDER BY clock_in_at DESC, id DESC
+            """,
+            (DEMO_USER_ID,),
+        ).fetchall()
+        return [as_record(row) for row in rows]
+
+
 @router.post("/clock-in", response_model=AttendanceRecord, status_code=201)
 def clock_in() -> AttendanceRecord:
     with attendance_db() as connection:
