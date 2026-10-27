@@ -259,6 +259,12 @@ python -m pytest tests/e2e -v
 [試験結果・証跡・再実行手順](docs/poc-integration-test.md)に詳細を記載しています。
 通常の `python dev.py test` にはPlaywrightは不要です。
 
+## PostgreSQL・SQLAlchemy・Alembic（WBS 1.2）
+
+PostgreSQL 16用の3テーブルモデル、UTC接続、Alembic初期マイグレーション、実DBテストを追加しました。#8のDB設計と修正理由 `change_reason` の補足を反映しています。[起動・マイグレーション・データ移行方針・検証手順](docs/postgresql-setup.md)を参照してください。
+
+現在のAPI・`python dev.py init-db`は引き続きSQLite PoCを使用します。打刻APIのPostgreSQL切替はWBS 1.4（#11）で行います。
+
 ## 公開リポジトリのセキュリティ方針
 
 AWSアクセスキー、パスワード、認証トークン、秘密鍵、実際の勤怠データ、実環境の接続情報はコミットしません。認証情報は環境変数やAWSの適切なシークレット管理手段で扱い、`.env` はコミットしない方針です。GitHub Issues・PR本文にも機密情報を記載しません。
