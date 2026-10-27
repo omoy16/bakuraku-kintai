@@ -1,6 +1,7 @@
 """Configuration and offline migration checks; no PostgreSQL server needed."""
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -39,9 +40,16 @@ def test_engine_is_lazy_and_handles_url_escaped_passwords():
 
 
 def test_offline_sql_from_another_directory(tmp_path):
+    # Use an actual checkout path containing spaces (common in Windows profiles).
+    backend = tmp_path / "project with spaces" / "backend"
+    backend.mkdir(parents=True)
+    shutil.copy2(ALEMBIC_CONFIG, backend / "alembic.ini")
+    for directory in ("app", "migrations"):
+        shutil.copytree(ROOT / "backend" / directory, backend / directory,
+                        ignore=shutil.ignore_patterns("__pycache__"))
     env = {**os.environ, "BAKURAKU_DATABASE_URL": "postgresql+psycopg://localhost/offline"}
     result = subprocess.run(
-        [sys.executable, "-m", "alembic", "-c", str(ALEMBIC_CONFIG),
+        [sys.executable, "-m", "alembic", "-c", str(backend / "alembic.ini"),
          "upgrade", "head", "--sql"],
         cwd=tmp_path, env=env, capture_output=True, text=True,
     )

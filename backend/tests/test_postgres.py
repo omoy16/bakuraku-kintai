@@ -4,6 +4,8 @@ Each run uses its own random schema. Existing schemas and SQLite files are untou
 """
 
 import os
+import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -123,6 +125,22 @@ def test_migration_creates_three_tables_constraints_and_indexes(db_engine):
 def test_model_and_migration_have_no_autogenerate_diff(db_engine):
     # Alembic does not compare every CHECK / exclusion constraint; test them below too.
     migrate(db_engine, action="check")
+
+
+def test_online_cli_uses_environment_from_another_directory(db_engine, tmp_path):
+    env = {**os.environ, "BAKURAKU_DATABASE_URL":
+           db_engine.url.render_as_string(hide_password=False)}
+    outputs = []
+    for arguments in (("upgrade", "head"), ("current",), ("check",)):
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "-c",
+             str(ROOT / "backend" / "alembic.ini"), *arguments],
+            cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30,
+        )
+        assert result.returncode == 0, result.stderr
+        outputs.append(result.stdout)
+    assert "0001_attendance_schema (head)" in outputs[1]
+    assert "No new upgrade operations detected." in outputs[2]
 
 
 def test_migration_is_repeatable_and_can_be_reversed(db_engine):
