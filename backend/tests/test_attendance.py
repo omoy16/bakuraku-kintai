@@ -7,8 +7,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app import attendance
 from app.database import connect_db, init_db
+from app.dependencies import get_clock
 from app.main import app
 
 
@@ -28,7 +28,7 @@ def client(database):
 
 def set_time(monkeypatch, value):
     now = datetime.fromisoformat(value)
-    monkeypatch.setattr(attendance, "utc_now", lambda: now)
+    monkeypatch.setitem(app.dependency_overrides, get_clock, lambda: lambda: now)
     return now
 
 

@@ -6,6 +6,8 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Iterator
 
+from app.exceptions import DatabaseUnavailableError
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 
@@ -45,3 +47,27 @@ def connect_db() -> Iterator[sqlite3.Connection]:
         connection.execute("PRAGMA foreign_keys = ON")
         with connection:
             yield connection
+
+
+@contextmanager
+def api_connection() -> Iterator[sqlite3.Connection]:
+    """Translate DB failures; commit/rollback/close before the service returns.
+
+    Restrict ValueError handling to configuration. Programming errors and
+    Pydantic validation failures must not be reported as DB outages.
+    """
+    try:
+        get_db_path()
+    except (OSError, ValueError):
+        raise DatabaseUnavailableError() from None
+    try:
+        with connect_db() as connection:
+            yield connection
+    except (sqlite3.Error, OSError):
+        raise DatabaseUnavailableError() from None
+
+
+def check_database() -> None:
+    """Check SQLite connectivity/schema readability, as in the original PoC."""
+    with api_connection() as connection:
+        connection.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()

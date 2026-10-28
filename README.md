@@ -155,9 +155,14 @@ pytest.ini                # ルートからのpytest設定
 backend/
   app/
     __init__.py
-    main.py               # FastAPI / API・DB接続確認
-    database.py           # SQLite初期化・接続
-    attendance.py         # 出勤・退勤・勤務状態API
+    main.py               # FastAPIへのルーター・共通例外ハンドラ登録
+    routers/              # 勤怠・ヘルスチェックのHTTP受付
+    dependencies.py       # Dependsで渡す利用者ID・時計
+    schemas.py            # API応答のPydanticモデル
+    attendance_service.py # 勤怠処理・SQLiteへの読み書き
+    exceptions.py         # 勤怠・DBの処理エラー
+    exception_handlers.py # エラーから409・503への共通変換
+    database.py           # SQLite初期化・接続・トランザクション
   data/                   # ローカルDB（Git対象外）
   tests/
     test_local_environment.py
@@ -264,6 +269,16 @@ python -m pytest tests/e2e -v
 PostgreSQL 16用の3テーブルモデル、UTC接続、Alembic初期マイグレーション、実DBテストを追加しました。#8のDB設計と修正理由 `change_reason` の補足を反映しています。[起動・マイグレーション・データ移行方針・検証手順](docs/postgresql-setup.md)を参照してください。
 
 現在のAPI・`python dev.py init-db`は引き続きSQLite PoCを使用します。打刻APIのPostgreSQL切替はWBS 1.4（#11）で行います。
+
+## API構造化（WBS 1.3）
+
+勤怠・ヘルスチェックをAPIRouterで分け、利用者IDと時計をDependsで受け取る構成に整理しました。
+勤怠処理は `attendance_service.py`、API応答の型は `schemas.py`、409・503への変換は共通例外ハンドラが担当します。
+勤怠の更新・コミット・ロールバック・接続解放はサービス内で完了します。
+時計は時刻そのものではなく関数を渡すため、DBの書込みロック取得後にサーバー時刻を読み取ります。
+
+APIのURL・JSON・エラーの `detail` は維持しています。APIはSQLite・固定デモユーザーを継続し、PostgreSQL切替はWBS 1.4、JWT認証はWBS 3.xで実装します。
+[構成・Dependsの差し替え例・確認手順](docs/api-structure.md)を参照してください。
 
 ## 公開リポジトリのセキュリティ方針
 
