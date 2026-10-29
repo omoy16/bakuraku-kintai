@@ -1,27 +1,38 @@
-"""WBS 0.7: real Chromium -> Vite proxy -> FastAPI -> temporary SQLite."""
+"""Real Chromium -> Vite -> FastAPI -> isolated PostgreSQL schema (WBS 1.4)."""
 
 import os
 from pathlib import Path
 import shutil
 import socket
-import sqlite3
 import subprocess
 import sys
 import time
+from uuid import uuid4
 
 import httpx
 import pytest
 from playwright.sync_api import expect, sync_playwright
+from sqlalchemy import select, text
+
+from app.models import AttendanceRecord, User
+from app.postgres import create_db_engine, get_database_url, session_scope
+from app.seed_demo_user import DEMO_COGNITO_SUB
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE = "http://127.0.0.1:5173"
+pytestmark = [
+    pytest.mark.postgres,
+    pytest.mark.skipif(not os.environ.get("BAKURAKU_TEST_DATABASE_URL"),
+                       reason="Set BAKURAKU_TEST_DATABASE_URL for PostgreSQL browser tests"),
+]
 
 
 class Services:
-    def __init__(self, directory):
+    def __init__(self, directory, engine):
         self.directory = directory
-        self.db = directory / "poc.sqlite3"
-        self.env = {**os.environ, "BAKURAKU_DB_PATH": str(self.db)}
+        self.db_engine = engine
+        self.env = {**os.environ,
+                    "BAKURAKU_DATABASE_URL": engine.url.render_as_string(hide_password=False)}
         self.api = None
         self.frontend = None
         self.logs = []
@@ -69,7 +80,26 @@ class Services:
 
 
 @pytest.fixture
-def services(tmp_path):
+def e2e_engine():
+    url = get_database_url(os.environ["BAKURAKU_TEST_DATABASE_URL"])
+    admin = create_db_engine(url)
+    schema = "wbs14_e2e_" + uuid4().hex
+    engine = None
+    with admin.begin() as connection:
+        connection.execute(text(f'CREATE SCHEMA "{schema}"'))
+    try:
+        engine = create_db_engine(url.update_query_dict({"options": f"-csearch_path={schema},public"}))
+        yield engine
+    finally:
+        if engine is not None:
+            engine.dispose()
+        with admin.begin() as connection:
+            connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        admin.dispose()
+
+
+@pytest.fixture
+def services(tmp_path, e2e_engine):
     # Never connect the suite to a developer's running API or development DB.
     for port in (8000, 5173):
         with socket.socket() as probe:
@@ -79,10 +109,16 @@ def services(tmp_path):
                 probe.listen(1)
             except OSError:
                 pytest.fail(f"Port {port} must be free before running the PoC suite")
-    services = Services(tmp_path)
+    services = Services(tmp_path, e2e_engine)
     try:
         subprocess.run([sys.executable, str(ROOT / "dev.py"), "init-db"],
                        cwd=ROOT, env=services.env, check=True, capture_output=True)
+        subprocess.run([sys.executable, str(ROOT / "dev.py"), "seed-demo"],
+                       cwd=ROOT, env=services.env, check=True, capture_output=True)
+        with session_scope(e2e_engine) as session:
+            services.user_id = session.scalar(
+                select(User.id).where(User.cognito_sub == DEMO_COGNITO_SUB)
+            )
         services.start_api()
         node = shutil.which("node")
         assert node, "Install Node.js before running the PoC suite"
@@ -278,9 +314,11 @@ def test_rapid_clicks_send_one_post(page):
 ], ids=["jst-midnight", "utc-midnight"])
 def test_overnight_shift_and_jst_display(page, services, start, expected_date, expected_time):
     # Old fixture data is deliberate: crossing dates and exceeding 16h must not close a shift.
-    with sqlite3.connect(services.db) as connection:
-        connection.execute("INSERT INTO attendance_records (user_id, clock_in_at) VALUES (?, ?)",
-                           ("demo-user", start))
+    from datetime import datetime
+
+    with session_scope(services.db_engine) as session:
+        session.add(AttendanceRecord(user_id=services.user_id,
+                                     clock_in_at=datetime.fromisoformat(start)))
     page.goto(BASE)
     ready(page, working=True)
     expect(page.locator(".history-item-heading time")).to_contain_text(expected_date)

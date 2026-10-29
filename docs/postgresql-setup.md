@@ -1,5 +1,8 @@
 # PostgreSQL・SQLAlchemy・Alembic（WBS 1.2 / #9）
 
+> 本文はWBS 1.2時点の実装・検証記録です。WBS 1.4でAPIとinit-dbもPostgreSQLへ切り替えました。
+> 現在の起動手順は[README](../README.md)、打刻処理は[WBS 1.4](postgresql-attendance-api.md)を参照してください。
+
 ## 対象と現在のAPI
 
 [#8](https://github.com/omoy16/bakuraku-kintai/issues/8) のDB設計と2026-10-27の補足に沿って、PostgreSQL用のモデル・接続・初期マイグレーションを用意した。開発・CIの検証対象は **PostgreSQL 16**。

@@ -185,7 +185,7 @@ async function readHistory() {
   const isTimestamp = (value) => typeof value === "string" && !Number.isNaN(Date.parse(value));
   if (!Array.isArray(data) || !data.every((record) => record
       && Number.isInteger(record.id)
-      && record.user_id === "demo-user"
+      && Number.isSafeInteger(record.user_id) && record.user_id > 0
       && isTimestamp(record.clock_in_at)
       && (record.clock_out_at === null || isTimestamp(record.clock_out_at)))) {
     throw new Error("Unexpected attendance history response");
