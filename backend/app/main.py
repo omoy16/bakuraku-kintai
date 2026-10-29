@@ -1,28 +1,12 @@
-"""FastAPI entry point with local development connectivity checks."""
+"""FastAPI composition: register routers and common error handlers."""
 
-import sqlite3
+from fastapi import FastAPI
 
-from fastapi import FastAPI, HTTPException
-
-from app.attendance import router as attendance_router
-from app.database import connect_db
+from app.exception_handlers import register_exception_handlers
+from app.routers.attendance import router as attendance_router
+from app.routers.health import router as health_router
 
 app = FastAPI(title="爆楽勤怠 API", version="0.1.0")
+register_exception_handlers(app)
+app.include_router(health_router)
 app.include_router(attendance_router)
-
-
-@app.get("/api/health")
-def health() -> dict[str, str]:
-    """Return a small response for API connectivity checks."""
-    return {"status": "ok"}
-
-
-@app.get("/api/health/db")
-def database_health() -> dict[str, str]:
-    """Check local database connectivity separately from API liveness."""
-    try:
-        with connect_db() as connection:
-            connection.execute("SELECT COUNT(*) FROM sqlite_master").fetchone()
-    except (sqlite3.Error, OSError, ValueError):
-        raise HTTPException(status_code=503, detail="Database unavailable") from None
-    return {"status": "ok", "database": "sqlite"}
