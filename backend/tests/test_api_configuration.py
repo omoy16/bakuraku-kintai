@@ -32,6 +32,10 @@ def test_missing_or_invalid_postgres_config_keeps_only_liveness_available(tmp_pa
             ("post", "/api/attendance/clock-out"),
             ("post", "/api/attendance/cancel"),
             ("get", "/api/attendance/overdue"),
+            ("get", "/api/attendance/records"),
+            ("get", "/api/attendance/records/1"),
+            ("get", "/api/attendance/records/1/audit-logs"),
+            ("patch", "/api/attendance/records/1"),
         ]:
             response = getattr(client, method)(path)
             assert response.status_code == 503
@@ -61,13 +65,20 @@ def test_openapi_declares_integer_ids_and_no_client_supplied_dependencies(monkey
         schema = client.get("/openapi.json").json()
     for path, methods in schema["paths"].items():
         if path.startswith("/api/attendance/"):
-            for operation in methods.values():
-                assert not operation.get("parameters")
+            for method, operation in methods.items():
+                parameters = operation.get("parameters", [])
+                if "{record_id}" in path:
+                    assert [(p["in"], p["name"]) for p in parameters] == [("path", "record_id")]
+                else:
+                    assert not parameters
                 if path == "/api/attendance/overdue/confirm":
                     body_schema = operation["requestBody"]["content"]["application/json"]["schema"]
                     assert body_schema == {
                         "$ref": "#/components/schemas/OverdueConfirmationRequest",
                     }
+                elif path == "/api/attendance/records/{record_id}" and method == "patch":
+                    body_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+                    assert body_schema == {"$ref": "#/components/schemas/AttendanceCorrectionRequest"}
                 else:
                     assert "requestBody" not in operation
     properties = schema["components"]["schemas"]["AttendanceRecord"]["properties"]
