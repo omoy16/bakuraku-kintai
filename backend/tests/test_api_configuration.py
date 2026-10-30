@@ -30,6 +30,7 @@ def test_missing_or_invalid_postgres_config_keeps_only_liveness_available(tmp_pa
             ("get", "/api/health/db"), ("get", "/api/attendance/status"),
             ("get", "/api/attendance/history"), ("post", "/api/attendance/clock-in"),
             ("post", "/api/attendance/clock-out"),
+            ("post", "/api/attendance/cancel"),
         ]:
             response = getattr(client, method)(path)
             assert response.status_code == 503
