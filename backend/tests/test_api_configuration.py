@@ -32,6 +32,7 @@ def test_missing_or_invalid_postgres_config_keeps_only_liveness_available(tmp_pa
             ("post", "/api/attendance/clock-out"),
             ("post", "/api/attendance/cancel"),
             ("get", "/api/attendance/overdue"),
+            ("post", "/api/attendance/overdue/confirm"),
             ("get", "/api/attendance/records"),
             ("get", "/api/attendance/records/1"),
             ("get", "/api/attendance/records/1/audit-logs"),
@@ -44,7 +45,28 @@ def test_missing_or_invalid_postgres_config_keeps_only_liveness_available(tmp_pa
     assert legacy.read_bytes() == b"existing SQLite file must be preserved"
 
 
-def test_database_failure_is_sanitized_and_liveness_stays_independent(monkeypatch):
+@pytest.mark.parametrize("method,path,payload", [
+    ("GET", "/api/health/db", None),
+    ("GET", "/api/attendance/status", None),
+    ("GET", "/api/attendance/history", None),
+    ("POST", "/api/attendance/clock-in", None),
+    ("POST", "/api/attendance/clock-out", None),
+    ("POST", "/api/attendance/cancel", None),
+    ("GET", "/api/attendance/overdue", None),
+    ("POST", "/api/attendance/overdue/confirm", {"choice": "still_working"}),
+    ("GET", "/api/attendance/records", None),
+    ("GET", "/api/attendance/records/1", None),
+    ("GET", "/api/attendance/records/1/audit-logs", None),
+    ("PATCH", "/api/attendance/records/1", {
+        "clock_in_at": "2026-10-29T22:00:00+09:00",
+        "clock_out_at": "2026-10-30T07:00:00+09:00",
+        "expected_operation_id": 1,
+        "change_reason": "退勤打刻を忘れたため",
+    }),
+])
+def test_database_failure_is_sanitized_and_liveness_stays_independent(
+    monkeypatch, method, path, payload,
+):
     monkeypatch.setenv("BAKURAKU_DATABASE_URL", "postgresql+psycopg://localhost/unused")
 
     @contextmanager
@@ -53,10 +75,15 @@ def test_database_failure_is_sanitized_and_liveness_stays_independent(monkeypatc
         yield  # contextmanager protocol; no database connection is attempted
 
     monkeypatch.setattr(postgres, "session_scope", unavailable)
-    with TestClient(create_app()) as client:
+    application = create_app()
+    # Reach each service's DB access, rather than failing in demo-user lookup.
+    application.dependency_overrides[get_current_user_id] = lambda: 1
+    with TestClient(application) as client:
         assert client.get("/api/health").status_code == 200
-        assert client.get("/api/health/db").json() == {"detail": "Database unavailable"}
-        assert client.post("/api/attendance/clock-in").status_code == 503
+        response = client.request(method, path, json=payload)
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Database unavailable"}
+        assert client.get("/api/health").json() == {"status": "ok"}
 
 
 def test_openapi_declares_integer_ids_and_no_client_supplied_dependencies(monkeypatch):
