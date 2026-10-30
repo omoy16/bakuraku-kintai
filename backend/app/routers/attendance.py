@@ -6,9 +6,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app import attendance_cancellation, attendance_service
+from app import attendance_cancellation, attendance_overdue, attendance_service
 from app.dependencies import DatabaseEngine, get_clock, get_current_user_id
-from app.schemas import AttendanceCancellation, AttendanceRecord, AttendanceStatus
+from app.schemas import (
+    AttendanceCancellation, AttendanceRecord, AttendanceStatus,
+    OverdueConfirmation, OverdueConfirmationRequest, OverdueStatus,
+)
 
 router = APIRouter(prefix="/api/attendance", tags=["attendance"])
 CurrentUserId = Annotated[int, Depends(get_current_user_id)]
@@ -38,3 +41,16 @@ def clock_out(engine: DatabaseEngine, user_id: CurrentUserId, clock: CurrentCloc
 @router.post("/cancel", response_model=AttendanceCancellation)
 def cancel_latest_punch(engine: DatabaseEngine, user_id: CurrentUserId) -> AttendanceCancellation:
     return attendance_cancellation.cancel_latest_punch(engine, user_id)
+
+
+@router.get("/overdue", response_model=OverdueStatus)
+def get_overdue(engine: DatabaseEngine, user_id: CurrentUserId, clock: CurrentClock) -> OverdueStatus:
+    return attendance_overdue.get_overdue(engine, user_id, clock)
+
+
+@router.post("/overdue/confirm", response_model=OverdueConfirmation)
+def confirm_overdue(
+    payload: OverdueConfirmationRequest, engine: DatabaseEngine,
+    user_id: CurrentUserId, clock: CurrentClock,
+) -> OverdueConfirmation:
+    return attendance_overdue.confirm_overdue(engine, user_id, payload.choice, clock)

@@ -25,6 +25,25 @@ class AttendanceStatus(BaseModel):
     active_record: AttendanceRecord | None
 
 
+class OverdueStatus(BaseModel):
+    record_id: int | None
+    overdue_at: datetime | None
+    requires_confirmation: bool
+    suppressed_until: datetime | None
+    last_choice: Literal["still_working", "forgot_clock_out"] | None
+
+
+class OverdueConfirmationRequest(BaseModel):
+    choice: Literal["still_working", "forgot_clock_out"]
+
+
+class OverdueConfirmation(BaseModel):
+    record_id: int
+    choice: Literal["still_working", "forgot_clock_out"]
+    requires_correction: bool
+    suppressed_until: datetime
+
+
 class HealthStatus(BaseModel):
     status: Literal["ok"]
 

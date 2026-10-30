@@ -139,7 +139,7 @@ def test_online_cli_uses_environment_from_another_directory(db_engine, tmp_path)
         )
         assert result.returncode == 0, result.stderr
         outputs.append(result.stdout)
-    assert "0001_attendance_schema (head)" in outputs[1]
+    assert "0002_overdue_confirmation (head)" in outputs[1]
     assert "No new upgrade operations detected." in outputs[2]
 
 

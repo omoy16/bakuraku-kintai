@@ -48,6 +48,8 @@ class AttendanceRecord(Base):
     clock_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    overdue_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    overdue_confirmed_choice: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("clock_timestamp()")
     )
@@ -56,6 +58,15 @@ class AttendanceRecord(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "overdue_confirmed_choice IS NULL OR "
+            "overdue_confirmed_choice IN ('still_working', 'forgot_clock_out')",
+            name="ck_attendance_overdue_choice",
+        ),
+        CheckConstraint(
+            "(overdue_confirmed_at IS NULL) = (overdue_confirmed_choice IS NULL)",
+            name="ck_attendance_overdue_fields",
+        ),
         CheckConstraint(
             "clock_out_at IS NULL OR clock_out_at >= clock_in_at",
             name="ck_attendance_time_order",

@@ -59,6 +59,8 @@ def test_offline_sql_from_another_directory(tmp_path):
     assert "EXCLUDE USING gist" in result.stdout
     assert "GENERATED ALWAYS AS IDENTITY" in result.stdout
     assert "change_reason TEXT" in result.stdout
+    assert "ADD COLUMN overdue_confirmed_at" in result.stdout
+    assert "ADD COLUMN overdue_confirmed_choice" in result.stdout
 
 
 def test_revision_history_does_not_require_a_database(tmp_path):
@@ -69,4 +71,4 @@ def test_revision_history_does_not_require_a_database(tmp_path):
         cwd=tmp_path, env=env, capture_output=True, text=True,
     )
     assert result.returncode == 0, result.stderr
-    assert "0001_attendance_schema (head)" in result.stdout
+    assert "0002_overdue_confirmation (head)" in result.stdout

@@ -31,6 +31,7 @@ def test_missing_or_invalid_postgres_config_keeps_only_liveness_available(tmp_pa
             ("get", "/api/attendance/history"), ("post", "/api/attendance/clock-in"),
             ("post", "/api/attendance/clock-out"),
             ("post", "/api/attendance/cancel"),
+            ("get", "/api/attendance/overdue"),
         ]:
             response = getattr(client, method)(path)
             assert response.status_code == 503
@@ -62,7 +63,13 @@ def test_openapi_declares_integer_ids_and_no_client_supplied_dependencies(monkey
         if path.startswith("/api/attendance/"):
             for operation in methods.values():
                 assert not operation.get("parameters")
-                assert "requestBody" not in operation
+                if path == "/api/attendance/overdue/confirm":
+                    body_schema = operation["requestBody"]["content"]["application/json"]["schema"]
+                    assert body_schema == {
+                        "$ref": "#/components/schemas/OverdueConfirmationRequest",
+                    }
+                else:
+                    assert "requestBody" not in operation
     properties = schema["components"]["schemas"]["AttendanceRecord"]["properties"]
     assert properties["user_id"]["type"] == "integer"
 
