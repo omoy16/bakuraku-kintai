@@ -13,6 +13,12 @@ class AttendanceRecord(BaseModel):
     clock_out_at: datetime | None
 
 
+class AttendanceCancellation(BaseModel):
+    record_id: int
+    cancelled_operation: Literal["clock_in", "clock_out"]
+    status: Literal["not_working", "working"]
+
+
 class AttendanceStatus(BaseModel):
     user_id: int
     status: Literal["not_working", "working"]

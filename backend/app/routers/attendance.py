@@ -6,9 +6,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app import attendance_service
+from app import attendance_cancellation, attendance_service
 from app.dependencies import DatabaseEngine, get_clock, get_current_user_id
-from app.schemas import AttendanceRecord, AttendanceStatus
+from app.schemas import AttendanceCancellation, AttendanceRecord, AttendanceStatus
 
 router = APIRouter(prefix="/api/attendance", tags=["attendance"])
 CurrentUserId = Annotated[int, Depends(get_current_user_id)]
@@ -33,3 +33,8 @@ def clock_in(engine: DatabaseEngine, user_id: CurrentUserId, clock: CurrentClock
 @router.post("/clock-out", response_model=AttendanceRecord)
 def clock_out(engine: DatabaseEngine, user_id: CurrentUserId, clock: CurrentClock) -> AttendanceRecord:
     return attendance_service.clock_out(engine, user_id, clock)
+
+
+@router.post("/cancel", response_model=AttendanceCancellation)
+def cancel_latest_punch(engine: DatabaseEngine, user_id: CurrentUserId) -> AttendanceCancellation:
+    return attendance_cancellation.cancel_latest_punch(engine, user_id)

@@ -192,6 +192,26 @@ Invoke-RestMethod "$base/api/attendance/history"
 
 現在は全アクセスが同じデモユーザーの記録を操作するローカル用APIです。Cognito認証・ユーザー分離はWBS 3.x、取消・修正は後続WBSで扱います。
 
+## 打刻取消API（WBS 1.5）
+
+`POST /api/attendance/cancel` は、デモユーザーの**最後の出勤または退勤の打刻**を60秒以内に取り消します。リクエスト本文は不要です。
+サーバー期限は操作ログのDB記録時刻から判定し、クライアントの時計は使用しません。
+
+- 出勤取消：`cancelled_at`を記録（物理削除なし）。勤務状態と通常の履歴一覧から除外。
+- 退勤取消：`clock_out_at`をnullに戻し、元の勤務を再開扱いにする。
+- 取消操作も変更前後を監査ログに残し、勤怠とログを同一トランザクションで確定。
+- 200は`record_id`、`cancelled_operation`、`status`を返す。対象なし・期限切れは409。DB障害は503。
+- 取消のUIはWBS 2.6で実装予定。API実装と60秒境界の試験は[詳細設計](docs/attendance-cancellation.md)を参照。
+
+PowerShellで出勤直後の取消を確認する例：
+
+```powershell
+$base = "http://127.0.0.1:8000"
+Invoke-RestMethod -Method Post "$base/api/attendance/clock-in"
+Invoke-RestMethod -Method Post "$base/api/attendance/cancel"
+Invoke-RestMethod "$base/api/attendance/status"
+```
+
 ## 簡易ホームUI（WBS 0.5）
 
 `http://127.0.0.1:5173` のホーム画面で出勤・退勤を打刻できます。オレンジのリングと読みやすい文字、青を基調にした簡易UIです。デザインの最終調整はWBS 2.xで行います。
