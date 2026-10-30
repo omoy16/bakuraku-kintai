@@ -229,6 +229,17 @@ Invoke-RestMethod "$base/api/attendance/status"
 
 [修正仕様・競合検知・PowerShell確認手順・検証範囲](docs/attendance-correction.md)
 
+## API単体・結合テスト（WBS 1.8）
+
+夜勤・二重打刻・取消期限・履歴修正・エラーをpytestで検証します。
+各APIの試験に加え、未退勤確認から修正・次の打刻までの流れ、修正後の退勤取消、
+確認と修正の同時操作をPostgreSQLで確認します。
+
+`python dev.py test`で実行できます。実DB試験には`BAKURAKU_TEST_DATABASE_URL`の指定が必要です。
+CIではAPI・DB試験のJUnit XMLを`api-pytest-results`、既存ブラウザ試験の結果を`poc-e2e-results`として保存します。
+
+[完了条件との対応・試験設計・再実行手順](docs/api-integration-tests.md)
+
 ## 簡易ホームUI（WBS 0.5）
 
 `http://127.0.0.1:5173` のホーム画面で出勤・退勤を打刻できます。オレンジのリングと読みやすい文字、青を基調にした簡易UIです。デザインの最終調整はWBS 2.xで行います。

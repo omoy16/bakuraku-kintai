@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app import attendance_cancellation
 from app.dependencies import get_current_user_id
@@ -87,13 +87,18 @@ def test_cancel_clock_out_reopens_same_shift(client, api_db):
     (60.000001, 409),
     (-1, 409),
 ])
+@pytest.mark.parametrize("last_punch", ["clock_in", "clock_out"])
 def test_60_second_boundary_uses_db_audit_time_not_punch_time(
-    client, api_db, monkeypatch, age, expected_status,
+    client, api_db, monkeypatch, age, expected_status, last_punch,
 ):
     # The punch timestamp can differ from the stored operation timestamp.
     client.post("/api/attendance/clock-in")
+    if last_punch == "clock_out":
+        assert client.post("/api/attendance/clock-out").status_code == 200
+    before = client.get("/api/attendance/status").json()
+    audit_count = 1 if last_punch == "clock_in" else 2
     with session_scope(api_db) as session:
-        log = session.scalar(select(Audit).where(Audit.operation == "clock_in"))
+        log = session.scalar(select(Audit).where(Audit.operation == last_punch))
         log.operated_at = START
     monkeypatch.setattr(
         attendance_cancellation, "db_now",
@@ -103,10 +108,14 @@ def test_60_second_boundary_uses_db_audit_time_not_punch_time(
     assert response.status_code == expected_status
     if expected_status == 409:
         assert response.json() == {"detail": "Cancellation window expired"}
-        assert client.get("/api/attendance/status").json()["status"] == "working"
-        assert counts(api_db) == (1, 1)
+        assert client.get("/api/attendance/status").json() == before
+        assert counts(api_db) == (1, audit_count)
     else:
-        assert counts(api_db) == (1, 2)
+        assert response.json()["cancelled_operation"] == last_punch
+        assert client.get("/api/attendance/status").json()["status"] == (
+            "not_working" if last_punch == "clock_in" else "working"
+        )
+        assert counts(api_db) == (1, audit_count + 1)
 
 
 def test_second_cancel_is_rejected_without_further_changes(client, api_db):
@@ -158,6 +167,36 @@ def test_cancel_audit_failure_rolls_back_shift(client, api_db, monkeypatch, last
     assert response.json() == {"detail": "Database unavailable"}
     assert client.get("/api/attendance/status").json() == before
     assert counts(api_db) == audit_before
+
+
+@pytest.mark.parametrize("last_punch", ["clock_in", "clock_out"])
+def test_cancel_commit_failure_rolls_back_and_can_be_retried(client, api_db, last_punch):
+    client.post("/api/attendance/clock-in")
+    if last_punch == "clock_out":
+        assert client.post("/api/attendance/clock-out").status_code == 200
+    before = client.get("/api/attendance/status").json()
+    audit_before = counts(api_db)
+    with api_db.begin() as connection:
+        connection.execute(text("""
+            CREATE FUNCTION reject_cancel_commit() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN RAISE EXCEPTION 'private cancellation failure'; END; $$
+        """))
+        connection.execute(text("""
+            CREATE CONSTRAINT TRIGGER reject_cancel_commit AFTER INSERT ON attendance_audit_logs
+            DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION reject_cancel_commit()
+        """))
+    try:
+        response = client.post("/api/attendance/cancel")
+        assert response.status_code == 503
+        assert response.json() == {"detail": "Database unavailable"}
+    finally:
+        with api_db.begin() as connection:
+            connection.execute(text("DROP TRIGGER reject_cancel_commit ON attendance_audit_logs"))
+            connection.execute(text("DROP FUNCTION reject_cancel_commit()"))
+    assert client.get("/api/attendance/status").json() == before
+    assert counts(api_db) == audit_before
+    assert client.post("/api/attendance/cancel").status_code == 200
+    assert counts(api_db) == (audit_before[0], audit_before[1] + 1)
 
 
 def test_latest_punch_only_and_earlier_shift_is_not_reopened(client, api_db):
