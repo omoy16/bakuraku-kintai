@@ -51,10 +51,13 @@ def snapshot(row: Record) -> dict:
     }
 
 
-def write_audit(session: Session, row: Record, operation: str, before: dict | None) -> None:
+def write_audit(
+    session: Session, row: Record, operation: str, before: dict | None,
+    *, change_reason: str | None = None,
+) -> None:
     session.add(AttendanceAuditLog(
         attendance_record_id=row.id, actor_user_id=row.user_id, operation=operation,
-        before_values=before, after_values=snapshot(row),
+        before_values=before, after_values=snapshot(row), change_reason=change_reason,
     ))
     # Check both attendance and audit writes before building the success response.
     session.flush()

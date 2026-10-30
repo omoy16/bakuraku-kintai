@@ -190,7 +190,7 @@ Invoke-RestMethod "$base/api/attendance/history"
 出勤後にAPIをCtrl+Cで停止・再起動しても `working` が残ることを確認できます。
 ブラウザの `http://127.0.0.1:8000/docs` からも各APIを実行できます。Vite起動中は `http://127.0.0.1:5173/api/attendance/status` でも状態を取得できます。
 
-現在は全アクセスが同じデモユーザーの記録を操作するローカル用APIです。Cognito認証・ユーザー分離はWBS 3.x、取消・修正は後続WBSで扱います。
+現在は全アクセスが同じデモユーザーの記録を操作するローカル用APIです。Cognito認証による利用者の切り替えはWBS 3.xで扱います。取消はWBS 1.5、修正・操作履歴はWBS 1.7のAPIで利用できます。
 
 ## 打刻取消API（WBS 1.5）
 
@@ -211,6 +211,23 @@ Invoke-RestMethod -Method Post "$base/api/attendance/clock-in"
 Invoke-RestMethod -Method Post "$base/api/attendance/cancel"
 Invoke-RestMethod "$base/api/attendance/status"
 ```
+
+## 履歴・修正・監査ログAPI（WBS 1.7）
+
+| メソッド | URL | 内容 |
+| --- | --- | --- |
+| GET | `/api/attendance/records` | 本人の有効な勤怠一覧。`is_modified`と`latest_operation_id`つき |
+| GET | `/api/attendance/records/{record_id}` | 本人の勤怠1件。取消済みも参照可能 |
+| PATCH | `/api/attendance/records/{record_id}` | 出退勤日時の本人修正。理由と取得時の最新操作IDが必須 |
+| GET | `/api/attendance/records/{record_id}/audit-logs` | 変更前後、操作日時、操作者、修正理由の参照 |
+
+- 理由は前後の空白を除いて1〜500文字。日時はタイムゾーンつきで指定し、未来日時や退勤が出勤より前の入力は拒否します。
+- PATCHでは出勤・退勤日時の両方を指定します。退勤を明示的に`null`へ戻す修正も可能ですが、勤務時間の重複・二重勤務中はDB制約で拒否します。
+- 別の画面で更新済みなら409を返し、上書きしません。取消済みの勤怠は修正できません。
+- 勤怠更新と`update`監査ログを同じトランザクションで保存し、ログ保存・コミットに失敗した場合は両方を取り消します。
+- 既存`/history`の応答は維持します。新しい履歴UIの「変更あり」は`/records`の`is_modified`を使います。画面実装はWBS 2.4 / 2.5です。
+
+[修正仕様・競合検知・PowerShell確認手順・検証範囲](docs/attendance-correction.md)
 
 ## 簡易ホームUI（WBS 0.5）
 
