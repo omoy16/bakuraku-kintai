@@ -11,17 +11,17 @@ ROOT = Path(__file__).resolve().parent
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="爆楽勤怠 ローカル開発コマンド")
-    parser.add_argument("command", choices=("init-db", "api", "test", "frontend", "build"))
+    parser.add_argument("command", choices=("init-db", "seed-demo", "api", "test", "frontend", "build"))
     args = parser.parse_args()
 
     if args.command == "init-db":
-        sys.path.insert(0, str(ROOT / "backend"))
-        from app.database import init_db
-
-        print(f"SQLite ready: {init_db()}")
-        return 0
-
-    if args.command in ("frontend", "build"):
+        command = [sys.executable, "-m", "alembic", "-c",
+                   str(ROOT / "backend" / "alembic.ini"), "upgrade", "head"]
+        cwd = ROOT / "backend"
+    elif args.command == "seed-demo":
+        command = [sys.executable, "-m", "app.seed_demo_user"]
+        cwd = ROOT / "backend"
+    elif args.command in ("frontend", "build"):
         npm = shutil.which("npm")
         if npm is None:
             parser.error("npm が見つかりません。Node.js と npm をインストールしてください。")

@@ -5,7 +5,7 @@
 **AWSネットワーク・インフラ・Webアプリケーション開発の学習を目的とした、出退勤管理アプリの個人開発プロジェクトです。**  
 会社・顧客の実データは使用せず、架空のデモユーザーで検証します。
 
-> **開発状況：WBS 0.7 のローカルPoC結合試験を実施（固定デモユーザー）。** 出勤→退勤→履歴確認を検証済みです。AWSでの動作・公開は後続WBSで確認します。
+> **開発状況：WBS 1.4のPostgreSQL打刻APIを実装（固定デモユーザー）。** AWS実環境・認証・取消・修正は後続WBSで確認します。
 
 ## アプリの主な機能（予定）
 
@@ -66,130 +66,102 @@ Private Subnet: Lambda (EventBridge Scheduler)
 
 計画工数は**ユーザー実働137時間**（予備日2日を別途想定）。ChatGPTは設計・実装・テスト・レビューを支援します。
 
-## ローカル開発環境（WBS 0.3）
+## ローカル開発環境（WBS 1.4）
 
-必要な環境：**Python 3.11 以上、Node.js 20.19 以上または 22.12 以上、npm**。
-MVPの簡易DBはPython標準のSQLiteを使います。PostgreSQLへの移行とSQLAlchemy / Alembicの導入はWBS 1.1–1.2で行います。
+必要な環境：Python 3.11以上、Node.js 20.19以上または22.12以上、npm、PostgreSQL 16。
+ローカルDBは既存の `compose.yaml` で起動できます。ルートの `.venv/` を使用します。
 
-### 初回セットアップ
+### 初回セットアップ（Windows PowerShell）
 
-リポジトリのルート（このREADMEがある場所）で実行します。
-
-```bash
+```powershell
 python -m venv .venv
-```
-
-仮想環境を有効化します。以降のPythonコマンドは有効化した環境で実行してください。
-
-| 環境 | 有効化コマンド |
-|---|---|
-| Windows PowerShell | `.venv\Scripts\Activate.ps1` |
-| Windows コマンドプロンプト | `.venv\Scripts\activate.bat` |
-| macOS / Linux | `source .venv/bin/activate` |
-
-PowerShellで有効化スクリプトが拒否される場合は、仮想環境のPythonを直接呼び出せます。
-例えば `.venv\Scripts\python.exe -m pip install -r backend/requirements-dev.txt`、
-`.venv\Scripts\python.exe dev.py api` のように実行します。
-
-```bash
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r backend/requirements-dev.txt
+npm --prefix frontend ci
+
+$env:BAKURAKU_POSTGRES_PASSWORD = "your-local-password"
+docker compose up -d postgres
+docker compose ps
+
+$env:BAKURAKU_DATABASE_URL = "postgresql+psycopg://bakuraku:your-local-password@127.0.0.1:5432/bakuraku"
 python dev.py init-db
-python dev.py test
-npm --prefix frontend install
+python dev.py seed-demo
 ```
 
-仮想環境はルートの `.venv/` に統一します。0.2の手順で作った `backend/.venv/` は以降使いません。
-`requirements-dev.txt` はAPI実行用依存に加え、pytest / TestClient用のHTTPXをインストールします。
+PostgreSQLがhealthyになってからinit-dbを実行します。パスワードはローカル用に置き換え、
+接続URLでは必要に応じてURLエンコードしてください。`.env`の自動読み込みは行いません。
+仮想環境の有効化が拒否される場合、`.venv\Scripts\python.exe dev.py api`のように直接実行できます。
+macOS/Linuxでは仮想環境を `source .venv/bin/activate`、環境変数を `export` で設定します。
+
+init-dbはAlembicでPostgreSQLのスキーマを作成・更新します。seed-demoはデモ利用者を明示登録します。
+どちらも再実行可能です。利用者IDはDBの生成値を使い、1とは仮定しません。
+API起動・マイグレーションでは利用者を自動登録しません。
 
 ### 起動（ターミナルを2つ使用）
 
-ターミナル1で仮想環境を有効化し、APIを起動します。
+API側のターミナルでは同じ `BAKURAKU_DATABASE_URL` を設定してください。
 
-```bash
+```powershell
 python dev.py api
 ```
 
-ターミナル2をルートで開き、フロントエンドを起動します。Pythonは仮想環境のものを使います。
+もう一方のターミナルでフロントエンドを起動します。
 
-```bash
+```powershell
 python dev.py frontend
 ```
 
-ブラウザで `http://127.0.0.1:5173` を開き、勤務状態と「出勤する」または「退勤する」ボタンを確認します。
-Viteは開発時 `/api/*` を `127.0.0.1:8000` にプロキシします。
-停止は各ターミナルでCtrl+C。画面から出勤・退勤を打刻し、保存済みの履歴を確認できます。
+ブラウザで `http://127.0.0.1:5173` を開きます。Viteは `/api/*` をFastAPIへ転送します。
+停止は各ターミナルでCtrl+C。`http://127.0.0.1:8000/docs`ではAPIを操作できます。
 
 ### コマンドと確認先
 
-| コマンド / URL | 内容・期待結果 |
-|---|---|
-| `python dev.py init-db` | SQLite初期化。既存のデータ・DBバージョンは保持 |
-| `python dev.py api` | FastAPIを127.0.0.1:8000で開発起動 |
-| `python dev.py test` | pytest実行。一時DBを使い、開発DBは変更しない |
-| `python dev.py frontend` | Viteの開発サーバーを起動 |
-| `python dev.py build` | 公開用ファイルをfrontend/dist/へ生成 |
-| `http://127.0.0.1:8000/api/health` | HTTP 200 / `{"status":"ok"}` |
-| `http://127.0.0.1:8000/api/health/db` | HTTP 200 / `{"status":"ok","database":"sqlite"}` |
-| `http://127.0.0.1:8000/docs` | FastAPIのAPI操作画面 |
+| コマンド / URL | 内容 |
+| --- | --- |
+| `python dev.py init-db` | PostgreSQLのAlembicマイグレーション |
+| `python dev.py seed-demo` | local:demo-userの明示登録・生成IDの表示 |
+| `python dev.py api` | APIを127.0.0.1:8000で開発起動 |
+| `python dev.py test` | pytest。実DB試験にはテスト用URLを明示 |
+| `python dev.py frontend` | Viteを起動 |
+| `python dev.py build` | frontend/dist/へビルド |
+| `/api/health` | 200 / `{"status":"ok"}`。DBなしでも利用可能 |
+| `/api/health/db` | 200 / `{"status":"ok","database":"postgresql"}` |
 
-DB未初期化・接続不可・ファイル破損時、DB確認APIはHTTP 503を返します。API単体のhealthはDBとは独立しています。
-DB確認APIは接続・SQLiteスキーマ読み取りを確認します。業務テーブルの存在確認や完全な整合性検査は行いません。
-`dev.py` は作業ディレクトリに依存せず実行できますが、ルート以外から呼ぶ場合はスクリプトのパスを指定してください。
+DB接続確認はSELECT 1を実行します。マイグレーション・デモ登録の完了確認ではありません。
+URL未設定・不正、接続不可などではDB依存APIが503になります。APIはSQLiteへ自動切替しません。
+デモユーザーが未登録の場合も、勤怠APIは503です。init-dbとseed-demoを確認してください。
 
-### 簡易DBの扱い
+### 既存SQLiteの扱い
 
-- 既定の保存先は `backend/data/bakuraku.sqlite3`。DBファイル・仮想環境はGit管理対象外です。
-- 初期化ではSQLiteファイルと勤怠テーブル・インデックスを用意します。0.3のDBを使っている場合も、APIを停止して `python dev.py init-db` を再実行してください。既存データは保持します。
-- 保存先を変える場合は環境変数 `BAKURAKU_DB_PATH` を指定します。相対パスは常にbackend/を基準とします。
-- PowerShellの設定例：`$env:BAKURAKU_DB_PATH = "data/custom.sqlite3"`
-- macOS / Linuxの設定例：`export BAKURAKU_DB_PATH="data/custom.sqlite3"`
-- 環境変数は初期化とAPI起動の両方で同じ値にしてください。`.env` ファイルの自動読み込みは行いません。
-- 開発DBを作り直す場合はAPIを停止し、必要なデータを退避してからファイルを削除し、再度 `python dev.py init-db` を実行します。
+WBS 0.xのSQLiteファイルは保持します。PostgreSQLへの自動変換・コピー・削除は行いません。
+現在のAPIとinit-dbはSQLiteを使用しません。旧 `BAKURAKU_DB_PATH` だけではAPIを起動・初期化できません。
+移行が必要な場合は別途方針を決めます。[PostgreSQL打刻APIの設計と検証](docs/postgresql-attendance-api.md)も参照してください。
 
-### ディレクトリ
+### 主な構成
 
-```text
-.venv/                    # 開発用Python仮想環境（Git対象外）
-dev.py                    # ローカル開発コマンド
-pytest.ini                # ルートからのpytest設定
-backend/
-  app/
-    __init__.py
-    main.py               # FastAPIへのルーター・共通例外ハンドラ登録
-    routers/              # 勤怠・ヘルスチェックのHTTP受付
-    dependencies.py       # Dependsで渡す利用者ID・時計
-    schemas.py            # API応答のPydanticモデル
-    attendance_service.py # 勤怠処理・SQLiteへの読み書き
-    exceptions.py         # 勤怠・DBの処理エラー
-    exception_handlers.py # エラーから409・503への共通変換
-    database.py           # SQLite初期化・接続・トランザクション
-  data/                   # ローカルDB（Git対象外）
-  tests/
-    test_local_environment.py
-    test_attendance.py
-  requirements.txt        # API実行用
-  requirements-dev.txt    # 開発・テスト用
-frontend/
-  index.html
-  package.json
-  vite.config.js          # 開発時APIプロキシ
-  src/
-    main.js               # 1ボタン打刻・勤務状態・履歴一覧・API通信
-    style.css
-```
+| ファイル | 担当 |
+| --- | --- |
+| `backend/app/main.py` | アプリ・Engineの寿命・ルーターと例外ハンドラ登録 |
+| `backend/app/routers/` | 勤怠とヘルスチェックのHTTP受付 |
+| `backend/app/dependencies.py` | DB Engine・生成利用者ID・時計の供給 |
+| `backend/app/attendance_service.py` | 行ロック・勤怠更新・操作ログ |
+| `backend/app/postgres.py` | PostgreSQL接続・トランザクション・DBエラー分類 |
+| `backend/app/models.py` / `schemas.py` | DBモデル / API応答の型 |
+| `backend/app/database.py` | 旧SQLite PoC用ヘルパー（現APIでは未使用） |
+| `frontend/src/main.js` | ワンボタン打刻・勤務状態・履歴・API通信 |
 
-## 打刻API PoC（WBS 0.4）
+## 打刻API（WBS 1.4）
 
-ユーザーは固定の `demo-user` です。リクエスト本文・ユーザー指定は不要で、打刻時刻はサーバー側のUTCで記録します。JSONの日時はUTCのISO 8601形式（末尾 `Z` または `+00:00`）です。ホーム画面では日本時間へ変換して表示します。
+ユーザーは明示seedした `local:demo-user` に対応する生成利用者IDです。リクエスト本文・ユーザー指定は不要で、打刻時刻はサーバー側のUTCで記録します。JSONの日時はUTCのISO 8601形式（末尾 `Z` または `+00:00`）です。ホーム画面では日本時間へ変換して表示します。
 
 | メソッド | パス | 成功時 | 内容 |
 |---|---|---|---|
 | GET | `/api/attendance/status` | 200 | `user_id`、`status`、`active_record` |
-| GET | `/api/attendance/history` | 200 | 固定デモユーザーの全打刻履歴（新しい順） |
+| GET | `/api/attendance/history` | 200 | 明示seedしたデモユーザーの全打刻履歴（新しい順） |
 | POST | `/api/attendance/clock-in` | 201 | 作成した勤怠レコード |
 | POST | `/api/attendance/clock-out` | 200 | 退勤時刻を入れた勤怠レコード |
 
-レコードは `id`、`user_id`、`clock_in_at`、`clock_out_at` を返します。勤務中は `clock_out_at` がnullです。
+レコードは `id`、`user_id`、`clock_in_at`、`clock_out_at` を返します。`user_id`は旧PoCの文字列からJSON整数へ変更しました。勤務中は `clock_out_at` がnullです。
 `status` は `not_working` / `working` の2種類です。勤務中だけ `active_record` にレコードが入り、それ以外はnullです。退勤後は `not_working` に戻り、同日でも次の勤務を開始できます。
 
 - 日付で勤務を区切りません。日本時間・UTCの日付が変わっても勤務中を維持します。
@@ -197,7 +169,8 @@ frontend/
 - 二重出勤は409 / `Already working`、未出勤または退勤済みの退勤は409 / `Not working` です。既存レコードは変更しません。
 - サーバー時刻が出勤時刻より前に戻った場合、退勤は409 / `Clock is earlier than clock-in time` となり、勤務中を維持します。
 - DB未初期化・テーブル未作成・接続不可などは503 / `Database unavailable` です。`python dev.py init-db` とDB設定を確認してください。
-- 打刻の状態確認と書き込みは同一トランザクションで処理し、DBの一意制約でも「1ユーザーの勤務中レコードは最大1件」を保証します。
+- 打刻は利用者行→勤怠行の順にロックし、勤怠と操作ログを同一トランザクションで保存します。DBの部分一意・排他制約でも二重出勤と時間重複を防ぎます。
+- 時間重複は409 / `Attendance period overlaps existing record`、操作ログの保存・コミット失敗も全体をロールバックして503になります。
 
 ### 手動確認（PowerShell）
 
@@ -217,7 +190,7 @@ Invoke-RestMethod "$base/api/attendance/history"
 出勤後にAPIをCtrl+Cで停止・再起動しても `working` が残ることを確認できます。
 ブラウザの `http://127.0.0.1:8000/docs` からも各APIを実行できます。Vite起動中は `http://127.0.0.1:5173/api/attendance/status` でも状態を取得できます。
 
-このPoCでは全アクセスが同じデモユーザーの記録を操作します。Cognito認証・ユーザー分離はWBS 3.xで追加します。取消・修正・PostgreSQLへの移行は後続WBSで扱います。
+現在は全アクセスが同じデモユーザーの記録を操作するローカル用APIです。Cognito認証・ユーザー分離はWBS 3.x、取消・修正は後続WBSで扱います。
 
 ## 簡易ホームUI（WBS 0.5）
 
@@ -241,34 +214,40 @@ Invoke-RestMethod "$base/api/attendance/history"
 
 ## 簡易履歴一覧（WBS 0.6）
 
-ホーム画面の「打刻履歴」に、固定デモユーザーの保存済みレコードを新しい順で表示します。各行には出勤日、出勤時刻、退勤時刻、勤務中／退勤済みの状態を日本時間（JST）で表示します。
+ホーム画面の「打刻履歴」に、明示seedしたデモユーザーの保存済みレコードを新しい順で表示します。各行には出勤日、出勤時刻、退勤時刻、勤務中／退勤済みの状態を日本時間（JST）で表示します。
 
 - ページ表示時、手動再取得時、出勤・退勤後に `GET /api/attendance/history` から最新の履歴を取得します。
 - 記録がない場合は空状態を表示し、勤務中のレコードは退勤時刻を `—` と表示します。
 - 履歴取得だけが失敗した場合は一覧内にエラーを表示し、取得済みの勤務状態に基づく打刻操作は継続できます。
 - この段階では全履歴を返します。ページネーション、期間絞り込み、修正・取消・変更履歴は後続WBSで扱います。
 
-## PoC結合試験（WBS 0.7）
+## ブラウザ結合試験（WBS 0.7 → 1.4）
 
-実ブラウザからVite・FastAPI・一時SQLiteを通して、出勤→退勤→履歴確認を検証します。
-PC・スマホ幅、再読み込み、API再起動、通信障害からの復旧、409、連打、JST表示を含む11件です。
+既存のPC/スマホ幅・出退勤・履歴・再読み込み・API再起動・通信障害・409・連打・JST表示の11件を、
+Chromium → Vite → FastAPI → 一時PostgreSQLスキーマで検証します。
+WBS 0.7当時のSQLite結果は[過去の検証記録](docs/poc-integration-test.md)に残しています。
 
-```bash
+API・Viteを停止し、8000番・5173番ポートを空けて実行してください。
+`BAKURAKU_TEST_DATABASE_URL`はテスト専用DBの接続先を明示します。未設定時、実DB試験はskipされます。
+
+```powershell
+docker compose exec postgres createdb -U bakuraku bakuraku_test
+$env:BAKURAKU_TEST_DATABASE_URL = "postgresql+psycopg://bakuraku:your-local-password@127.0.0.1:5432/bakuraku_test"
 python -m pip install -r backend/requirements-e2e.txt
 python -m playwright install chromium
-python -m pytest tests/e2e -v
+python dev.py test
+python -m pytest tests/e2e -q
 ```
 
-フロントエンドの依存をインストールしたうえで、開発用API・Viteを停止して実行してください。
-試験は8000番・5173番ポートを使用してサーバーを自動起動・停止し、開発DBは変更しません。
-[試験結果・証跡・再実行手順](docs/poc-integration-test.md)に詳細を記載しています。
-通常の `python dev.py test` にはPlaywrightは不要です。
+createdbはテストDBが未作成の場合だけ実行します。試験はランダム名の専用スキーマを使い、終了時に片付けます。
+ブラウザ試験ではAPI・Viteの起動停止とDB初期化・seedを自動で行い、開発DB・既存SQLiteは変更しません。
+通常の `python dev.py test` にPlaywrightは不要です。CIはPostgreSQL実DB試験とブラウザ試験を別ジョブで実行します。
 
 ## PostgreSQL・SQLAlchemy・Alembic（WBS 1.2）
 
 PostgreSQL 16用の3テーブルモデル、UTC接続、Alembic初期マイグレーション、実DBテストを追加しました。#8のDB設計と修正理由 `change_reason` の補足を反映しています。[起動・マイグレーション・データ移行方針・検証手順](docs/postgresql-setup.md)を参照してください。
 
-現在のAPI・`python dev.py init-db`は引き続きSQLite PoCを使用します。打刻APIのPostgreSQL切替はWBS 1.4（#11）で行います。
+WBS 1.4（#11）でAPI・DB接続確認・init-dbをPostgreSQLへ切り替えました。現在の起動手順は本READMEを参照してください。
 
 ## API構造化（WBS 1.3）
 
@@ -277,7 +256,7 @@ PostgreSQL 16用の3テーブルモデル、UTC接続、Alembic初期マイグ�
 勤怠の更新・コミット・ロールバック・接続解放はサービス内で完了します。
 時計は時刻そのものではなく関数を渡すため、DBの書込みロック取得後にサーバー時刻を読み取ります。
 
-APIのURL・JSON・エラーの `detail` は維持しています。APIはSQLite・固定デモユーザーを継続し、PostgreSQL切替はWBS 1.4、JWT認証はWBS 3.xで実装します。
+1.3時点ではSQLite PoCの応答を維持しました。1.4でPostgreSQLへ切り替え、user_idを生成された数値IDへ変更しています。JWT認証はWBS 3.xの対象です。
 [構成・Dependsの差し替え例・確認手順](docs/api-structure.md)を参照してください。
 
 ## 公開リポジトリのセキュリティ方針
@@ -286,4 +265,4 @@ AWSアクセスキー、パスワード、認証トークン、秘密鍵、実�
 
 ## ステータス
 
-**WBS 0.7：ローカルPoCのブラウザ結合試験11件・既存pytest31件が成功。** 修正・取消・認証などは後続WBSで実装します。
+**WBS 1.4：PostgreSQLによる打刻・監査ログ・同時実行制御を実装。** 最終コミットの検証結果は対応PRに記録します。修正・取消・認証は後続WBSの対象です。

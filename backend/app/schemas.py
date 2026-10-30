@@ -8,13 +8,13 @@ from pydantic import BaseModel
 
 class AttendanceRecord(BaseModel):
     id: int
-    user_id: str
+    user_id: int
     clock_in_at: datetime
     clock_out_at: datetime | None
 
 
 class AttendanceStatus(BaseModel):
-    user_id: str
+    user_id: int
     status: Literal["not_working", "working"]
     active_record: AttendanceRecord | None
 
@@ -24,4 +24,4 @@ class HealthStatus(BaseModel):
 
 
 class DatabaseHealthStatus(HealthStatus):
-    database: Literal["sqlite"]
+    database: Literal["postgresql"]

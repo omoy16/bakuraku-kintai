@@ -1,5 +1,8 @@
 # WBS 0.7 PoC結合試験
 
+> 以下はSQLiteを使ったWBS 0.7当時の検証結果です。WBS 1.4以降の同じブラウザ試験はPostgreSQLの専用スキーマを使用します。
+> 現在の実行手順は[README](../README.md)と[WBS 1.4](postgresql-attendance-api.md)を参照してください。
+
 対応Issue: [#7](https://github.com/omoy16/bakuraku-kintai/issues/7)
 
 ## 結果

@@ -1,5 +1,8 @@
 # WBS 1.3 API構造化
 
+> 本文はWBS 1.3時点の構造化・検証記録です。WBS 1.4でDB処理をPostgreSQLへ切り替え、user_idを数値IDへ変更しました。
+> 現在の構成と手順は[WBS 1.4](postgresql-attendance-api.md)と[README](../README.md)を参照してください。
+
 対応Issue: [#10](https://github.com/omoy16/bakuraku-kintai/issues/10)
 
 ## 目的と範囲

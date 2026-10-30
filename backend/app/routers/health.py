@@ -1,8 +1,9 @@
-"""Liveness and SQLite readiness, independent of attendance identity."""
+"""API liveness and PostgreSQL connectivity, independent of the demo identity."""
 
 from fastapi import APIRouter
 
-from app.database import check_database
+from app.dependencies import DatabaseEngine
+from app.postgres import check_database
 from app.schemas import DatabaseHealthStatus, HealthStatus
 
 router = APIRouter(prefix="/api/health", tags=["health"])
@@ -14,6 +15,6 @@ def health() -> HealthStatus:
 
 
 @router.get("/db", response_model=DatabaseHealthStatus)
-def database_health() -> DatabaseHealthStatus:
-    check_database()
-    return DatabaseHealthStatus(status="ok", database="sqlite")
+def database_health(engine: DatabaseEngine) -> DatabaseHealthStatus:
+    check_database(engine)
+    return DatabaseHealthStatus(status="ok", database="postgresql")
