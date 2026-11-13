@@ -5,7 +5,7 @@
 **AWSネットワーク・インフラ・Webアプリケーション開発の学習を目的とした、出退勤管理アプリの個人開発プロジェクトです。**  
 会社・顧客の実データは使用せず、架空のデモユーザーで検証します。
 
-> **開発状況：WBS 1.4のPostgreSQL打刻APIを実装（固定デモユーザー）。** AWS実環境・認証・取消・修正は後続WBSで確認します。
+> **開発状況：WBS 1.8までのAPI・DB関連コード（打刻、取消、16時間未退勤判定、修正・監査ログ、テスト）をmainで確認済み（認証は固定デモユーザー）。** AWS実環境・Cognito認証・通知・UI仕上げは後続WBSの対象です。
 
 ## アプリの主な機能（予定）
 
@@ -29,6 +29,12 @@ UIは、**シンプルな文字とオレンジの炎リング＋明るいブル�
 | 定期処理 | AWS Lambda、EventBridge Scheduler、Amazon SNS |
 | ネットワーク | VPC、EC2、Security Group、NAT EC2、iptables、IGW |
 | 開発・テスト | GitHub Issues、Pull Requests、pytest、GitHub Actions |
+
+## AWS基盤設計（2026-11-13時点の整理）
+
+AWSの構成案とこれまでの設計判断は [docs/architecture/](docs/architecture/README.md) に集約しています。まず [5分概要](docs/architecture/overview-5min.md) を確認し、必要に応じて[基本設計](docs/architecture/aws-basic-design.md)、[ネットワーク設計](docs/architecture/aws-network-design.md)、[設計変更履歴](docs/architecture/decision-log.md)、[検証計画](docs/architecture/validation-plan.md)を参照してください。編集可能な [AWSアイコン構成図（draw.io）](docs/architecture/aws-architecture.drawio) も用意しています。
+
+**この資料は設計ドラフトです。** AWS環境の構築・VPC OriginのPoC・料金の実測は未完了であり、詳細設計の設定値は検証後に更新します。
 
 ## AWS構成（計画）
 
@@ -313,4 +319,4 @@ AWSアクセスキー、パスワード、認証トークン、秘密鍵、実�
 
 ## ステータス
 
-**WBS 1.4：PostgreSQLによる打刻・監査ログ・同時実行制御を実装。** 最終コミットの検証結果は対応PRに記録します。修正・取消・認証は後続WBSの対象です。
+**API/DBのWBS 1.1〜1.8はGitHub Issuesで完了扱いです。** 実装済みコード・テストはmainに存在しますが、CognitoとAWS実機検証は未完了です。
