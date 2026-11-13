@@ -10,7 +10,7 @@
 
 ## 1枚で分かる構成
 
-\`\`\`mermaid
+```mermaid
 flowchart TB
     U["ブラウザ（デモ社員）"] --> CF["CloudFront / HTTPS"]
     U -. "ログイン（OAuth2 / PKCE）" .-> COG["Cognito User Pool"]
@@ -22,7 +22,7 @@ flowchart TB
     L -->|"祝日API・SNSの公開Endpoint"| NAT["Public NAT EC2 / iptables SNAT"]
     NAT --> IGW["Internet Gateway / Internet"]
     L -. "SNS Publish" .-> SNS["Amazon SNS（メール）"]
-\`\`\`
+```
 
 > 図は論理構成。SNSの実際の通信先（公開EndpointかVPC Endpointか）、SSM、NATの通信・ルーティング条件は詳細設計で扱う。Cognitoへのログインはブラウザから行い、NAT EC2は経由しない。
 
@@ -40,9 +40,9 @@ flowchart TB
 
 ## 現在の開発状況
 
-- **[実装済]** ローカル/CIのFastAPI、PostgreSQL、基本打刻、取消、16時間判定、修正・監査ログ、結合テスト。mainには3テーブル（\`users\`、\`attendance_records\`、\`attendance_audit_logs\`）が存在。
+- **[実装済]** ローカル/CIのFastAPI、PostgreSQL、基本打刻、取消、16時間判定、修正・監査ログ、結合テスト。mainには3テーブル（`users`、`attendance_records`、`attendance_audit_logs`）が存在。
 - **[未実装]** Cognitoでのログイン/JWT認可、AWS実環境のVPC・EC2・RDS・S3・CloudFront、Lambda・SNS・NAT EC2の一式。GitHubのWBS 3.x・4.x・5.xが後続。
-- **[要検証]** CloudFrontからPrivate EC2へ\`/api/*\`が届くか、Authorizationヘッダー/キャッシュ/HTTPS設計、NAT停止時と復旧後の挙動。
+- **[要検証]** CloudFrontからPrivate EC2へ`/api/*`が届くか、Authorizationヘッダー/キャッシュ/HTTPS設計、NAT停止時と復旧後の挙動。
 - **[未決定]** 実機で使うAZ ID、CIDR最終値、EC2/RDSサイズ、秘密情報管理、構築順序の修正、運用時間・通知対象日の細部。
 
 ## なぜこの構成か
@@ -55,7 +55,7 @@ flowchart TB
 ## 構築前に最優先で決めること
 
 1. **外向き通信の導入順**: WBS 4.5でPrivate EC2を配置するのにNAT EC2は5.4の予定。初期SSM接続・パッケージ導入・Cognito JWKS取得の経路を先に確保する。
-2. **CloudFront VPC Origin**: 東京対応。ただし \`apne1-az3\` は対象外。利用する実AZ IDとAPIの通信・キャッシュをPoCで確認。
+2. **CloudFront VPC Origin**: 東京対応。ただし `apne1-az3` は対象外。利用する実AZ IDとAPIの通信・キャッシュをPoCで確認。
 3. **SG・ルートテーブル**: CloudFront→API、EC2/Lambda→RDS、Private→NAT、NAT→外部の許可を具体化。
 4. **費用・停止**: Budgetsを最初に設定。RDS停止中もストレージ課金が残り、7日後に自動再起動する。NAT EC2のEIP等も確認。
 
