@@ -30,7 +30,7 @@ GitHub Issuesは進捗の正本。過去に記録されたローカルCI成功�
 
 ### 証跡記録テンプレート
 
-\`\`\`markdown
+```markdown
 ### 試験ID: T-xx / 実施日時（JST）
 - 対象/目的:
 - 変更内容・影響範囲:
@@ -41,7 +41,7 @@ GitHub Issuesは進捗の正本。過去に記録されたローカルCI成功�
 - 実際の結果・期待値との差異:
 - 復旧操作と復旧後観測:
 - 合否/残課題/関連Issue:
-\`\`\`
+```
 
 ## 3. AWS構築・確認順とゲート
 
@@ -98,7 +98,7 @@ GitHub Issuesは進捗の正本。過去に記録されたローカルCI成功�
 
 > 実行前にAWS CLIのプロファイルとリージョン、対象権限を確認する。以下は読み取り用。操作系コマンドは構築当日に復旧手順とセットで作る。
 
-\`\`\`bash
+```bash
 # AWS上の観測: アカウント情報は公開Issueに貼らない
 aws configure list
 aws ec2 describe-vpcs --region ap-northeast-1
@@ -120,7 +120,7 @@ sudo iptables -t nat -L POSTROUTING -n -v
 
 # 到達性確認は対象環境の許可/トークン不要な宛先で
 curl -I --max-time 10 https://example.org
-\`\`\`
+```
 
 ### 変更前後で特に比較するもの
 
