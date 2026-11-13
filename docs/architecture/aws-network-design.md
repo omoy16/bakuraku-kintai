@@ -28,7 +28,7 @@
 
 ### 1.1 障害・セキュリティ境界を含む概念図
 
-\`\`\`mermaid
+```mermaid
 flowchart TB
   CF["CloudFront（VPC OriginをPoC）"]
   S3["非公開S3/OAC"]
@@ -56,7 +56,7 @@ flowchart TB
   APP -. "外向き443（必要時）" .-> NAT
   L -->|"祝日API等のHTTPS"| NAT
   NAT --> IGW["IGW → Internet"]
-\`\`\`
+```
 
 **図のRDS二か所は二つのDBインスタンスを表さない。** 単一のRDSインスタンスと、その配置候補を含む2AZサブネットグループを示す概念図である。
 
@@ -122,7 +122,7 @@ flowchart TB
 
 ### 5.2 参考コマンド（**AWS環境ではそのまま無批判に実行しない**）
 
-\`\`\`bash
+```bash
 # 変更前の証跡をまず取得
 ip -4 addr
 ip -4 route
@@ -138,7 +138,7 @@ sudo iptables -t nat -A POSTROUTING -s 10.0.11.0/24 -o ens5 -j MASQUERADE
 sysctl net.ipv4.ip_forward
 sudo iptables -L FORWARD -n -v
 sudo iptables -t nat -L POSTROUTING -n -v
-\`\`\`
+```
 
 この例だけでは**FORWARDチェーンの必要な許可が未完成**。既定ポリシー、ESTABLISHED/RELATEDの戻り許可、SNAT元ネットワーク、ルール重複防止、永続化、OS再起動後の検証が必要。インターフェース名ens5は例示。Amazon Linux 2023でのiptables管理方式も実機で確認する。
 
