@@ -23,7 +23,7 @@
 
 ## 2. 構成と採用理由
 
-\`\`\`mermaid
+```mermaid
 flowchart LR
     U["ブラウザ"] -->|"HTTPS"| CF["CloudFront"]
     U -. "CognitoでPKCEログイン" .-> C["Cognito User Pool"]
@@ -35,7 +35,7 @@ flowchart LR
     L -->|"外向きHTTPS"| N["Public NAT EC2"]
     N --> IGW["IGW → Internet"]
     L -. "SNS Publish" .-> S["SNS → Email"]
-\`\`\`
+```
 
 | 層 | リソース | 設計方針と理由 |
 | --- | --- | --- |
@@ -87,12 +87,12 @@ flowchart LR
 
 ### 3.2 FastAPI/JWT/DB
 
-\`\`\`text
+```text
 ブラウザ -- Cognito認証 --> アクセストークン
 ブラウザ -- Authorization: Bearer ... --> CloudFront /api/* --> FastAPI
 FastAPI -- JWKSを利用して署名・claims検証 --> Cognito sub
 FastAPI -- users.cognito_subを照合 --> users.id → 本人の勤怠のみ操作
-\`\`\`
+```
 
 FastAPIでJWT署名、iss、exp、token_use=access、client_id、kid/JWKSキャッシュ（必要に応じてscope）を検証する。URLやJSONに送られた任意のuser_idは権限の根拠としない。[WBS 3.3](https://github.com/omoy16/bakuraku-kintai/issues/25)、[3.4](https://github.com/omoy16/bakuraku-kintai/issues/26)。
 
@@ -131,7 +131,7 @@ FastAPIでJWT署名、iss、exp、token_use=access、client_id、kid/JWKSキャ�
 
 ## 5. Lambda / 祝日API / SNS
 
-\`\`\`mermaid
+```mermaid
 flowchart TD
   T["Scheduler定期起動"] --> L["VPC Lambda"]
   L --> H["祝日API (NAT EC2経由)"]
@@ -142,7 +142,7 @@ flowchart TD
   S -- はい --> X["スキップ"]
   S -- いいえ --> N["SNS Publish"]
   N --> A["成功時reminder_sent_atを記録"]
-\`\`\`
+```
 
 - EventBridge Schedulerの**毎朝09:00 JST**は2026-10の旧ドラフト値。現時点で確定した時刻ではない。
 - Holidays JP APIを祝日判定の候補とする。外部データに欠損・通信失敗・JSON不正がある場合は、誤通知しないよう保留/中止。
