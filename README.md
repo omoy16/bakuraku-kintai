@@ -30,6 +30,12 @@ UIは、**シンプルな文字とオレンジの炎リング＋明るいブル�
 | ネットワーク | VPC、EC2、Security Group、NAT EC2、iptables、IGW |
 | 開発・テスト | GitHub Issues、Pull Requests、pytest、GitHub Actions |
 
+## AWS基盤設計（2026-11-13時点の整理）
+
+AWSの構成案とこれまでの設計判断は [docs/architecture/](docs/architecture/README.md) に集約しています。まず [5分概要](docs/architecture/overview-5min.md) を確認し、必要に応じて[基本設計](docs/architecture/aws-basic-design.md)、[ネットワーク設計](docs/architecture/aws-network-design.md)、[設計変更履歴](docs/architecture/decision-log.md)、[検証計画](docs/architecture/validation-plan.md)を参照してください。編集可能な [AWSアイコン構成図（draw.io）](docs/architecture/aws-architecture.drawio) も用意しています。
+
+**この資料は設計ドラフトです。** AWS環境の構築・VPC OriginのPoC・料金の実測は未完了であり、詳細設計の設定値は検証後に更新します。
+
 ## AWS構成（計画）
 
 ```text
